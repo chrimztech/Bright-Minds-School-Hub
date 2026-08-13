@@ -50,6 +50,9 @@ import { Route as AuthenticatedAnnouncementsRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdmissionsRouteImport } from './routes/_authenticated/admissions'
 import { Route as AuthenticatedAccountsRouteImport } from './routes/_authenticated/accounts'
 import { Route as AuthenticatedAcademicYearsRouteImport } from './routes/_authenticated/academic-years'
+import { Route as AuthenticatedStaffStaffIdRouteImport } from './routes/_authenticated/staff.$staffId'
+import { Route as AuthenticatedPupilsPupilIdRouteImport } from './routes/_authenticated/pupils.$pupilId'
+import { Route as AuthenticatedGuardiansGuardianIdRouteImport } from './routes/_authenticated/guardians.$guardianId'
 
 const ChangePasswordRoute = ChangePasswordRouteImport.update({
   id: '/change-password',
@@ -260,6 +263,24 @@ const AuthenticatedAcademicYearsRoute =
     path: '/academic-years',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedStaffStaffIdRoute =
+  AuthenticatedStaffStaffIdRouteImport.update({
+    id: '/$staffId',
+    path: '/$staffId',
+    getParentRoute: () => AuthenticatedStaffRoute,
+  } as any)
+const AuthenticatedPupilsPupilIdRoute =
+  AuthenticatedPupilsPupilIdRouteImport.update({
+    id: '/$pupilId',
+    path: '/$pupilId',
+    getParentRoute: () => AuthenticatedPupilsRoute,
+  } as any)
+const AuthenticatedGuardiansGuardianIdRoute =
+  AuthenticatedGuardiansGuardianIdRouteImport.update({
+    id: '/$guardianId',
+    path: '/$guardianId',
+    getParentRoute: () => AuthenticatedGuardiansRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -281,7 +302,7 @@ export interface FileRoutesByFullPath {
   '/documents': typeof AuthenticatedDocumentsRoute
   '/exams': typeof AuthenticatedExamsRoute
   '/fees': typeof AuthenticatedFeesRoute
-  '/guardians': typeof AuthenticatedGuardiansRoute
+  '/guardians': typeof AuthenticatedGuardiansRouteWithChildren
   '/health': typeof AuthenticatedHealthRoute
   '/homework': typeof AuthenticatedHomeworkRoute
   '/inventory': typeof AuthenticatedInventoryRoute
@@ -293,15 +314,18 @@ export interface FileRoutesByFullPath {
   '/portal': typeof AuthenticatedPortalRoute
   '/procurement': typeof AuthenticatedProcurementRoute
   '/promotions': typeof AuthenticatedPromotionsRoute
-  '/pupils': typeof AuthenticatedPupilsRoute
+  '/pupils': typeof AuthenticatedPupilsRouteWithChildren
   '/report-cards': typeof AuthenticatedReportCardsRoute
   '/reports': typeof AuthenticatedReportsRoute
   '/settings': typeof AuthenticatedSettingsRoute
-  '/staff': typeof AuthenticatedStaffRoute
+  '/staff': typeof AuthenticatedStaffRouteWithChildren
   '/subjects': typeof AuthenticatedSubjectsRoute
   '/timetable': typeof AuthenticatedTimetableRoute
   '/transport': typeof AuthenticatedTransportRoute
   '/users': typeof AuthenticatedUsersRoute
+  '/guardians/$guardianId': typeof AuthenticatedGuardiansGuardianIdRoute
+  '/pupils/$pupilId': typeof AuthenticatedPupilsPupilIdRoute
+  '/staff/$staffId': typeof AuthenticatedStaffStaffIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -323,7 +347,7 @@ export interface FileRoutesByTo {
   '/documents': typeof AuthenticatedDocumentsRoute
   '/exams': typeof AuthenticatedExamsRoute
   '/fees': typeof AuthenticatedFeesRoute
-  '/guardians': typeof AuthenticatedGuardiansRoute
+  '/guardians': typeof AuthenticatedGuardiansRouteWithChildren
   '/health': typeof AuthenticatedHealthRoute
   '/homework': typeof AuthenticatedHomeworkRoute
   '/inventory': typeof AuthenticatedInventoryRoute
@@ -335,15 +359,18 @@ export interface FileRoutesByTo {
   '/portal': typeof AuthenticatedPortalRoute
   '/procurement': typeof AuthenticatedProcurementRoute
   '/promotions': typeof AuthenticatedPromotionsRoute
-  '/pupils': typeof AuthenticatedPupilsRoute
+  '/pupils': typeof AuthenticatedPupilsRouteWithChildren
   '/report-cards': typeof AuthenticatedReportCardsRoute
   '/reports': typeof AuthenticatedReportsRoute
   '/settings': typeof AuthenticatedSettingsRoute
-  '/staff': typeof AuthenticatedStaffRoute
+  '/staff': typeof AuthenticatedStaffRouteWithChildren
   '/subjects': typeof AuthenticatedSubjectsRoute
   '/timetable': typeof AuthenticatedTimetableRoute
   '/transport': typeof AuthenticatedTransportRoute
   '/users': typeof AuthenticatedUsersRoute
+  '/guardians/$guardianId': typeof AuthenticatedGuardiansGuardianIdRoute
+  '/pupils/$pupilId': typeof AuthenticatedPupilsPupilIdRoute
+  '/staff/$staffId': typeof AuthenticatedStaffStaffIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -367,7 +394,7 @@ export interface FileRoutesById {
   '/_authenticated/documents': typeof AuthenticatedDocumentsRoute
   '/_authenticated/exams': typeof AuthenticatedExamsRoute
   '/_authenticated/fees': typeof AuthenticatedFeesRoute
-  '/_authenticated/guardians': typeof AuthenticatedGuardiansRoute
+  '/_authenticated/guardians': typeof AuthenticatedGuardiansRouteWithChildren
   '/_authenticated/health': typeof AuthenticatedHealthRoute
   '/_authenticated/homework': typeof AuthenticatedHomeworkRoute
   '/_authenticated/inventory': typeof AuthenticatedInventoryRoute
@@ -379,15 +406,18 @@ export interface FileRoutesById {
   '/_authenticated/portal': typeof AuthenticatedPortalRoute
   '/_authenticated/procurement': typeof AuthenticatedProcurementRoute
   '/_authenticated/promotions': typeof AuthenticatedPromotionsRoute
-  '/_authenticated/pupils': typeof AuthenticatedPupilsRoute
+  '/_authenticated/pupils': typeof AuthenticatedPupilsRouteWithChildren
   '/_authenticated/report-cards': typeof AuthenticatedReportCardsRoute
   '/_authenticated/reports': typeof AuthenticatedReportsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
-  '/_authenticated/staff': typeof AuthenticatedStaffRoute
+  '/_authenticated/staff': typeof AuthenticatedStaffRouteWithChildren
   '/_authenticated/subjects': typeof AuthenticatedSubjectsRoute
   '/_authenticated/timetable': typeof AuthenticatedTimetableRoute
   '/_authenticated/transport': typeof AuthenticatedTransportRoute
   '/_authenticated/users': typeof AuthenticatedUsersRoute
+  '/_authenticated/guardians/$guardianId': typeof AuthenticatedGuardiansGuardianIdRoute
+  '/_authenticated/pupils/$pupilId': typeof AuthenticatedPupilsPupilIdRoute
+  '/_authenticated/staff/$staffId': typeof AuthenticatedStaffStaffIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -432,6 +462,9 @@ export interface FileRouteTypes {
     | '/timetable'
     | '/transport'
     | '/users'
+    | '/guardians/$guardianId'
+    | '/pupils/$pupilId'
+    | '/staff/$staffId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -474,6 +507,9 @@ export interface FileRouteTypes {
     | '/timetable'
     | '/transport'
     | '/users'
+    | '/guardians/$guardianId'
+    | '/pupils/$pupilId'
+    | '/staff/$staffId'
   id:
     | '__root__'
     | '/'
@@ -517,6 +553,9 @@ export interface FileRouteTypes {
     | '/_authenticated/timetable'
     | '/_authenticated/transport'
     | '/_authenticated/users'
+    | '/_authenticated/guardians/$guardianId'
+    | '/_authenticated/pupils/$pupilId'
+    | '/_authenticated/staff/$staffId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -815,8 +854,66 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAcademicYearsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/staff/$staffId': {
+      id: '/_authenticated/staff/$staffId'
+      path: '/$staffId'
+      fullPath: '/staff/$staffId'
+      preLoaderRoute: typeof AuthenticatedStaffStaffIdRouteImport
+      parentRoute: typeof AuthenticatedStaffRoute
+    }
+    '/_authenticated/pupils/$pupilId': {
+      id: '/_authenticated/pupils/$pupilId'
+      path: '/$pupilId'
+      fullPath: '/pupils/$pupilId'
+      preLoaderRoute: typeof AuthenticatedPupilsPupilIdRouteImport
+      parentRoute: typeof AuthenticatedPupilsRoute
+    }
+    '/_authenticated/guardians/$guardianId': {
+      id: '/_authenticated/guardians/$guardianId'
+      path: '/$guardianId'
+      fullPath: '/guardians/$guardianId'
+      preLoaderRoute: typeof AuthenticatedGuardiansGuardianIdRouteImport
+      parentRoute: typeof AuthenticatedGuardiansRoute
+    }
   }
 }
+
+interface AuthenticatedGuardiansRouteChildren {
+  AuthenticatedGuardiansGuardianIdRoute: typeof AuthenticatedGuardiansGuardianIdRoute
+}
+
+const AuthenticatedGuardiansRouteChildren: AuthenticatedGuardiansRouteChildren =
+  {
+    AuthenticatedGuardiansGuardianIdRoute:
+      AuthenticatedGuardiansGuardianIdRoute,
+  }
+
+const AuthenticatedGuardiansRouteWithChildren =
+  AuthenticatedGuardiansRoute._addFileChildren(
+    AuthenticatedGuardiansRouteChildren,
+  )
+
+interface AuthenticatedPupilsRouteChildren {
+  AuthenticatedPupilsPupilIdRoute: typeof AuthenticatedPupilsPupilIdRoute
+}
+
+const AuthenticatedPupilsRouteChildren: AuthenticatedPupilsRouteChildren = {
+  AuthenticatedPupilsPupilIdRoute: AuthenticatedPupilsPupilIdRoute,
+}
+
+const AuthenticatedPupilsRouteWithChildren =
+  AuthenticatedPupilsRoute._addFileChildren(AuthenticatedPupilsRouteChildren)
+
+interface AuthenticatedStaffRouteChildren {
+  AuthenticatedStaffStaffIdRoute: typeof AuthenticatedStaffStaffIdRoute
+}
+
+const AuthenticatedStaffRouteChildren: AuthenticatedStaffRouteChildren = {
+  AuthenticatedStaffStaffIdRoute: AuthenticatedStaffStaffIdRoute,
+}
+
+const AuthenticatedStaffRouteWithChildren =
+  AuthenticatedStaffRoute._addFileChildren(AuthenticatedStaffRouteChildren)
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAcademicYearsRoute: typeof AuthenticatedAcademicYearsRoute
@@ -835,7 +932,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedDocumentsRoute: typeof AuthenticatedDocumentsRoute
   AuthenticatedExamsRoute: typeof AuthenticatedExamsRoute
   AuthenticatedFeesRoute: typeof AuthenticatedFeesRoute
-  AuthenticatedGuardiansRoute: typeof AuthenticatedGuardiansRoute
+  AuthenticatedGuardiansRoute: typeof AuthenticatedGuardiansRouteWithChildren
   AuthenticatedHealthRoute: typeof AuthenticatedHealthRoute
   AuthenticatedHomeworkRoute: typeof AuthenticatedHomeworkRoute
   AuthenticatedInventoryRoute: typeof AuthenticatedInventoryRoute
@@ -847,11 +944,11 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedPortalRoute: typeof AuthenticatedPortalRoute
   AuthenticatedProcurementRoute: typeof AuthenticatedProcurementRoute
   AuthenticatedPromotionsRoute: typeof AuthenticatedPromotionsRoute
-  AuthenticatedPupilsRoute: typeof AuthenticatedPupilsRoute
+  AuthenticatedPupilsRoute: typeof AuthenticatedPupilsRouteWithChildren
   AuthenticatedReportCardsRoute: typeof AuthenticatedReportCardsRoute
   AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
-  AuthenticatedStaffRoute: typeof AuthenticatedStaffRoute
+  AuthenticatedStaffRoute: typeof AuthenticatedStaffRouteWithChildren
   AuthenticatedSubjectsRoute: typeof AuthenticatedSubjectsRoute
   AuthenticatedTimetableRoute: typeof AuthenticatedTimetableRoute
   AuthenticatedTransportRoute: typeof AuthenticatedTransportRoute
@@ -875,7 +972,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDocumentsRoute: AuthenticatedDocumentsRoute,
   AuthenticatedExamsRoute: AuthenticatedExamsRoute,
   AuthenticatedFeesRoute: AuthenticatedFeesRoute,
-  AuthenticatedGuardiansRoute: AuthenticatedGuardiansRoute,
+  AuthenticatedGuardiansRoute: AuthenticatedGuardiansRouteWithChildren,
   AuthenticatedHealthRoute: AuthenticatedHealthRoute,
   AuthenticatedHomeworkRoute: AuthenticatedHomeworkRoute,
   AuthenticatedInventoryRoute: AuthenticatedInventoryRoute,
@@ -887,11 +984,11 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedPortalRoute: AuthenticatedPortalRoute,
   AuthenticatedProcurementRoute: AuthenticatedProcurementRoute,
   AuthenticatedPromotionsRoute: AuthenticatedPromotionsRoute,
-  AuthenticatedPupilsRoute: AuthenticatedPupilsRoute,
+  AuthenticatedPupilsRoute: AuthenticatedPupilsRouteWithChildren,
   AuthenticatedReportCardsRoute: AuthenticatedReportCardsRoute,
   AuthenticatedReportsRoute: AuthenticatedReportsRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
-  AuthenticatedStaffRoute: AuthenticatedStaffRoute,
+  AuthenticatedStaffRoute: AuthenticatedStaffRouteWithChildren,
   AuthenticatedSubjectsRoute: AuthenticatedSubjectsRoute,
   AuthenticatedTimetableRoute: AuthenticatedTimetableRoute,
   AuthenticatedTransportRoute: AuthenticatedTransportRoute,

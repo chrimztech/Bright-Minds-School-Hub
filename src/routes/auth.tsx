@@ -18,7 +18,7 @@ const capabilities = ["Attendance", "Fees & billing", "Exams & marks", "Payroll"
 function AuthPage() {
   const { user, loading, login } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -31,7 +31,7 @@ function AuthPage() {
     event.preventDefault();
     setBusy(true);
     try {
-      const { mustChangePassword } = await login(email, password);
+      const { mustChangePassword } = await login(identifier, password);
       navigate({ to: mustChangePassword ? "/change-password" : "/dashboard", replace: true });
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "Invalid credentials");
@@ -161,17 +161,17 @@ function AuthPage() {
           <form onSubmit={signIn} className="space-y-5">
             <div className="space-y-2">
               <Label className="text-[11px] font-bold uppercase tracking-[0.08em] text-foreground/75">
-                Email address
+                Email or phone number
               </Label>
               <div className="relative">
                 <Mail className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/65" />
                 <Input
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
+                  type="text"
+                  value={identifier}
+                  onChange={(event) => setIdentifier(event.target.value)}
                   required
-                  autoComplete="email"
-                  placeholder="you@school.ac.zm"
+                  autoComplete="username"
+                  placeholder="you@school.ac.zm or phone number"
                   className="h-12 rounded-2xl bg-card/80 pl-11 shadow-sm"
                 />
               </div>

@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { api, type SchoolClass } from "@/lib/api";
+import { api, type SchoolClass, type Pupil } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Users, X } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/classes")({
@@ -21,6 +21,7 @@ function Classes() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<SchoolClass | null>(null);
+  const [roster, setRoster] = useState<SchoolClass | null>(null);
   const { data = [] } = useQuery({
     queryKey: ["classes-list"],
     queryFn: () => api.classes.list(),
@@ -81,6 +82,7 @@ function Classes() {
                     </TableCell>
                     <TableCell>{c.capacity ?? "—"}</TableCell>
                     <TableCell className="text-right">
+                      <Button variant="ghost" size="sm" onClick={() => setRoster(c)}><Users className="h-4 w-4" /></Button>
                       <Button variant="ghost" size="sm" onClick={() => setEditing(c)}><Pencil className="h-4 w-4" /></Button>
                       <Button variant="ghost" size="sm" onClick={() => { if (confirm(`Delete class "${c.name}"?`)) remove.mutate(c.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                     </TableCell>
@@ -97,7 +99,110 @@ function Classes() {
           </DialogContent>
         </Dialog>
       )}
+      {roster && (
+        <Dialog open onOpenChange={() => setRoster(null)}>
+          <RosterDialog schoolClass={roster} />
+        </Dialog>
+      )}
     </>
+  );
+}
+
+function RosterDialog({ schoolClass }: { schoolClass: SchoolClass }) {
+  const qc = useQueryClient();
+  const [addId, setAddId] = useState("");
+  const [search, setSearch] = useState("");
+
+  const { data: inClass = [], isLoading } = useQuery({
+    queryKey: ["pupils-by-class", schoolClass.id],
+    queryFn: () => api.pupils.byClass(schoolClass.id),
+  });
+  const { data: allPupils = [] } = useQuery({ queryKey: ["pupils-all"], queryFn: () => api.pupils.all() });
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["pupils-by-class", schoolClass.id] });
+    qc.invalidateQueries({ queryKey: ["pupils-all"] });
+    qc.invalidateQueries({ queryKey: ["pupils"] });
+  };
+
+  const setClass = useMutation({
+    mutationFn: ({ pupil, classId }: { pupil: Pupil; classId: string | null }) =>
+      api.pupils.update(pupil.id, { fullName: pupil.fullName, ...({ classId } as any) }),
+    onSuccess: invalidate,
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const notInClass = allPupils.filter((p) => p.schoolClass?.id !== schoolClass.id);
+  const filtered = notInClass.filter((p) => {
+    const s = search.toLowerCase().trim();
+    return !s || p.fullName.toLowerCase().includes(s) || p.admissionNo.toLowerCase().includes(s);
+  });
+
+  return (
+    <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+      <DialogHeader>
+        <DialogTitle>{schoolClass.name}{schoolClass.stream ? " " + schoolClass.stream : ""} roster</DialogTitle>
+      </DialogHeader>
+      <div className="space-y-4">
+        <div className="flex items-end gap-2">
+          <div className="flex-1">
+            <Label>Add pupil to class</Label>
+            <Input placeholder="Search name or admission no…" value={search} onChange={(e) => setSearch(e.target.value)} className="mb-1.5" />
+            <Select value={addId} onValueChange={setAddId}>
+              <SelectTrigger><SelectValue placeholder={`Pick from ${filtered.length} pupils…`} /></SelectTrigger>
+              <SelectContent>
+                {filtered.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.fullName}{p.schoolClass ? ` (currently ${p.schoolClass.name}${p.schoolClass.stream ? " " + p.schoolClass.stream : ""})` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button
+            disabled={!addId || setClass.isPending}
+            onClick={() => {
+              const pupil = allPupils.find((p) => p.id === addId);
+              if (pupil) setClass.mutate({ pupil, classId: schoolClass.id });
+              setAddId("");
+            }}
+          >
+            Add
+          </Button>
+        </div>
+
+        <div>
+          <Label className="mb-1.5 block">Currently enrolled ({inClass.length})</Label>
+          <div className="rounded-lg border bg-card">
+            <Table>
+              <TableBody>
+                {isLoading ? (
+                  <TableRow><TableCell className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
+                ) : inClass.length === 0 ? (
+                  <TableRow><TableCell className="text-center text-muted-foreground py-6">No pupils in this class yet.</TableCell></TableRow>
+                ) : (
+                  inClass.map((p) => (
+                    <TableRow key={p.id}>
+                      <TableCell className="font-medium py-2">{p.fullName}</TableCell>
+                      <TableCell className="font-mono text-[11.5px] text-muted-foreground py-2">{p.admissionNo}</TableCell>
+                      <TableCell className="text-right py-2">
+                        <Button
+                          variant="ghost" size="sm"
+                          disabled={setClass.isPending}
+                          onClick={() => setClass.mutate({ pupil: p, classId: null })}
+                        >
+                          <X className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      </div>
+    </DialogContent>
   );
 }
 

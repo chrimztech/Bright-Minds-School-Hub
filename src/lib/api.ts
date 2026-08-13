@@ -70,8 +70,8 @@ const del = (path: string) => request<void>("DELETE", path);
 // Auth
 export const api = {
   auth: {
-    login: (email: string, password: string) =>
-      post<AuthUser & { token: string }>("/auth/login", { email, password }),
+    login: (identifier: string, password: string) =>
+      post<AuthUser & { token: string }>("/auth/login", { identifier, password }),
     register: (data: { email: string; password: string; fullName: string; roles?: string[] }) =>
       post<AuthUser & { token: string }>("/auth/register", data),
     changePassword: (password: string) =>
@@ -101,6 +101,8 @@ export const api = {
     create: (data: Partial<Staff>) => post<Staff>("/staff", data),
     update: (id: string, data: Partial<Staff>) => put<Staff>(`/staff/${id}`, data),
     delete: (id: string) => del(`/staff/${id}`),
+    provisionAccount: (id: string, temporaryPassword: string) =>
+      post<Staff>(`/staff/${id}/account`, { temporaryPassword }),
   },
 
   classes: {
@@ -169,6 +171,9 @@ export const api = {
     payments: {
       list: (pupilId?: string, invoiceId?: string) => get<Payment[]>("/fees/payments", { pupilId, invoiceId }),
       create: (data: Partial<Payment>) => post<Payment>("/fees/payments", data),
+      pending: () => get<Payment[]>("/fees/payments/pending"),
+      confirm: (id: string) => patch<Payment>(`/fees/payments/${id}/confirm`),
+      reject: (id: string, reason?: string) => patch<Payment>(`/fees/payments/${id}/reject`, { reason }),
     },
   },
 
@@ -207,10 +212,14 @@ export const api = {
     list: () => get<Guardian[]>("/guardians"),
     byPupil: (pupilId: string) => get<Guardian[]>(`/guardians/pupil/${pupilId}`),
     get: (id: string) => get<Guardian>(`/guardians/${id}`),
+    pupilsFor: (id: string) => get<Pupil[]>(`/guardians/${id}/pupils`),
     me: () => get<Guardian | null>("/guardians/me"),
     dashboard: () => get<ParentDashboard | null>("/guardians/me/dashboard"),
     myPupils: () => get<Pupil[]>("/guardians/me/pupils"),
     myInvoices: () => get<Invoice[]>("/guardians/me/invoices"),
+    myPaymentClaims: () => get<Payment[]>("/guardians/me/payments"),
+    submitPayment: (data: { invoiceId: string; amount: number; method?: string; reference?: string }) =>
+      post<Payment>("/guardians/me/payments", data),
     myAttendance: (from: string, to: string) => get<Attendance[]>("/guardians/me/attendance", { from, to }),
     myMarks: (examId: string) => get<Mark[]>("/guardians/me/marks", { examId }),
     childAttendance: (pupilId: string, from: string, to: string) =>
@@ -408,6 +417,19 @@ export const api = {
 
   admin: {
     backup: () => get<Record<string, unknown>>("/admin/backup"),
+    backupSql: async () => {
+      const token = getToken();
+      const res = await fetch(BASE_URL + "/admin/backup/sql", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: res.statusText }));
+        throw new Error(err.message ?? "Backup failed");
+      }
+      const disposition = res.headers.get("Content-Disposition") ?? "";
+      const match = /filename="([^"]+)"/.exec(disposition);
+      return { blob: await res.blob(), filename: match?.[1] ?? "school-full-backup.sql" };
+    },
   },
 
   roles: {
@@ -456,7 +478,7 @@ export const api = {
 export interface PageResponse<T> { content: T[]; page: number; size: number; totalElements: number; totalPages: number; }
 export interface DashboardData { totalPupils: number; activeStaff: number; totalClasses: number; presentToday: number; collectedThisMonth: number; recentAnnouncements: { id: string; title: string; createdAt: string }[]; }
 export interface Pupil { id: string; admissionNo: string; fullName: string; gender?: string; dob?: string; status: string; schoolClass?: SchoolClass; classId?: string; address?: string; phone?: string; photoUrl?: string; bloodGroup?: string; allergies?: string; medicalInfo?: string; }
-export interface Staff { id: string; staffNo: string; fullName: string; gender?: string; email?: string; phone?: string; isTeacher: boolean; status: string; basicSalary?: number; photoUrl?: string; employmentType?: string; }
+export interface Staff { id: string; staffNo: string; fullName: string; gender?: string; email?: string; phone?: string; isTeacher: boolean; status: string; basicSalary?: number; photoUrl?: string; employmentType?: string; contractEndDate?: string; roleCategory?: string; userId?: string; }
 export interface SchoolClass { id: string; name: string; stream?: string; levelOrder: number; capacity?: number; classTeacher?: Staff; classTeacherId?: string; }
 export interface Subject { id: string; name: string; code?: string; }
 export interface AcademicYear { id: string; name: string; startDate: string; endDate: string; isCurrent: boolean; }
@@ -466,13 +488,13 @@ export type AssessmentType = "MID_TERM" | "END_OF_TERM" | "MOCK" | "OPENER" | "O
 export interface Exam { id: string; name: string; termId?: string; assessmentType?: AssessmentType; examDate?: string; outOf: number; weight: number; }
 export interface Mark { id: string; pupil: Pupil; exam: Exam; subject: Subject; score: number; comment?: string; }
 export interface FeeItem { id: string; name: string; category: string; amount: number; classId?: string; termId?: string; isRecurring: boolean; schoolClass?: SchoolClass; term?: Term; }
-export interface Invoice { id: string; invoiceNo: string; pupil: Pupil; pupilId?: string; total: number; paid: number; status: string; dueDate?: string; description?: string; createdAt?: string; termId?: string; }
-export interface Payment { id: string; receiptNo: string; pupil?: Pupil; pupilId?: string; invoice?: Invoice; invoiceId?: string; amount: number; method: string; paidOn: string; reference?: string; }
+export interface Invoice { id: string; invoiceNo: string; pupil: Pupil; pupilId?: string; total: number; paid: number; status: string; dueDate?: string; description?: string; createdAt?: string; termId?: string; feeItem?: FeeItem; }
+export interface Payment { id: string; receiptNo: string; pupil?: Pupil; pupilId?: string; invoice?: Invoice; invoiceId?: string; amount: number; method: string; paidOn: string; reference?: string; status: "PENDING" | "CONFIRMED" | "REJECTED"; submittedBy?: Guardian; rejectionReason?: string; }
 export interface Announcement { id: string; title: string; body: string; audience: string; createdAt: string; }
 export interface CalendarEvent { id: string; title: string; description?: string; startsAt: string; endsAt?: string; location?: string; audience: string; }
 export interface Homework { id: string; title: string; description?: string; schoolClass?: SchoolClass; classId?: string; subject?: Subject; subjectId?: string; dueDate?: string; attachmentUrl?: string; }
 export interface Admission { id: string; applicationNo?: string; fullName: string; gender?: string; dob?: string; status: string; parentName?: string; parentPhone?: string; parentEmail?: string; previousSchool?: string; targetClassId?: string; targetClass?: SchoolClass; notes?: string; interviewDate?: string; regFeePaid?: boolean; }
-export interface Guardian { id: string; fullName: string; relationship?: string; phone?: string; email?: string; userId?: string; temporaryPassword?: string; }
+export interface Guardian { id: string; fullName: string; relationship?: string; phone?: string; email?: string; address?: string; occupation?: string; nationalId?: string; userId?: string; temporaryPassword?: string; }
 export interface ParentTeacher { id: string; staffNo: string; fullName: string; email?: string; phone?: string; }
 export interface ParentClassInfo { id: string; name: string; stream?: string; levelOrder: number; classTeacher?: ParentTeacher; }
 export interface AttendanceSummary { from: string; to: string; total: number; present: number; absent: number; late: number; sick: number; excused: number; percentage: number; }

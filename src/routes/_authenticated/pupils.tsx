@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api, type Pupil } from "@/lib/api";
@@ -184,7 +184,9 @@ function Pupils() {
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className="font-medium py-2.5">{p.fullName}</TableCell>
+                      <TableCell className="font-medium py-2.5">
+                        <Link to="/pupils/$pupilId" params={{ pupilId: p.id }} className="hover:underline">{p.fullName}</Link>
+                      </TableCell>
                       <TableCell className="font-mono text-[11.5px] text-muted-foreground py-2.5">
                         {p.admissionNo}
                       </TableCell>

@@ -11,8 +11,12 @@ export const Route = createFileRoute("/_authenticated")({
   component: AuthedShell,
 });
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function pageTitle(pathname: string): string {
-  const last = pathname.split("/").filter(Boolean).pop() ?? "";
+  const segments = pathname.split("/").filter(Boolean);
+  let last = segments.pop() ?? "";
+  if (UUID_RE.test(last)) last = segments.pop() ?? last;
   if (!last || last === "dashboard") return "Dashboard";
   return last
     .split("-")

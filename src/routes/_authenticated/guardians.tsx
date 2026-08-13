@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api, type Guardian } from "@/lib/api";
@@ -10,8 +10,9 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Link2, KeyRound } from "lucide-react";
+import { Plus, Link2, KeyRound, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useQueries } from "@tanstack/react-query";
 
 export const Route = createFileRoute("/_authenticated/guardians")({
   head: () => ({ meta: [{ title: "Parents & guardians" }] }),
@@ -21,6 +22,7 @@ export const Route = createFileRoute("/_authenticated/guardians")({
 function Guardians() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Guardian | null>(null);
   const [linkFor, setLinkFor] = useState<string | null>(null);
   const [accountFor, setAccountFor] = useState<Guardian | null>(null);
 
@@ -29,9 +31,33 @@ function Guardians() {
     queryFn: () => api.guardians.list(),
   });
 
+  const pupilQueries = useQueries({
+    queries: guardians.map((g) => ({
+      queryKey: ["guardian-pupils", g.id],
+      queryFn: () => api.guardians.pupilsFor(g.id),
+      enabled: guardians.length > 0,
+    })),
+  });
+  const pupilsByGuardian = new Map(guardians.map((g, i) => [g.id, pupilQueries[i]?.data ?? []]));
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["guardians"] });
+    qc.invalidateQueries({ queryKey: ["guardian-pupils"] });
+  };
+
   const create = useMutation({
     mutationFn: (f: any) => api.guardians.create(f),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["guardians"] }); toast.success("Parent added"); setOpen(false); },
+    onSuccess: () => { invalidate(); toast.success("Parent added"); setOpen(false); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const update = useMutation({
+    mutationFn: ({ id, ...f }: any) => api.guardians.update(id, f),
+    onSuccess: () => { invalidate(); toast.success("Parent updated"); setEditing(null); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => api.guardians.delete(id),
+    onSuccess: () => { invalidate(); toast.success("Parent deleted"); },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -46,46 +72,76 @@ function Guardians() {
       <div className="p-6">
         <div className="rounded-lg border bg-card">
           <Table>
-            <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Relationship</TableHead><TableHead>Phone</TableHead><TableHead>Email</TableHead><TableHead>Login</TableHead><TableHead></TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Relationship</TableHead><TableHead>Phone</TableHead><TableHead>Email</TableHead><TableHead>Linked pupil(s)</TableHead><TableHead>Login</TableHead><TableHead></TableHead></TableRow></TableHeader>
             <TableBody>
-              {guardians.length === 0 ? <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No parents yet.</TableCell></TableRow>
-                : guardians.map((g) => (
-                  <TableRow key={g.id}>
-                    <TableCell className="font-medium">{g.fullName}</TableCell>
-                    <TableCell>{g.relationship ?? "—"}</TableCell>
-                    <TableCell>{g.phone ?? "—"}</TableCell>
-                    <TableCell>{g.email ?? "—"}</TableCell>
-                    <TableCell>
-                      <span className={`text-xs font-medium ${g.userId ? "text-green-600" : "text-muted-foreground"}`}>
-                        {g.userId ? "Active" : "Not created"}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => setLinkFor(g.id)}><Link2 className="h-4 w-4 mr-1" /> Link pupil</Button>
-                        <Button variant="ghost" size="sm" disabled={!g.email} onClick={() => setAccountFor(g)}>
-                          <KeyRound className="h-4 w-4 mr-1" /> {g.userId ? "Reset login" : "Create login"}
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+              {guardians.length === 0 ? <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No parents yet.</TableCell></TableRow>
+                : guardians.map((g) => {
+                  const linkedPupils = pupilsByGuardian.get(g.id) ?? [];
+                  return (
+                    <TableRow key={g.id}>
+                      <TableCell className="font-medium">
+                        <Link to="/guardians/$guardianId" params={{ guardianId: g.id }} className="hover:underline">{g.fullName}</Link>
+                      </TableCell>
+                      <TableCell>{g.relationship ?? "—"}</TableCell>
+                      <TableCell>{g.phone ?? "—"}</TableCell>
+                      <TableCell>{g.email ?? "—"}</TableCell>
+                      <TableCell>
+                        {linkedPupils.length === 0 ? (
+                          <span className="text-muted-foreground">—</span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1">
+                            {linkedPupils.map((p) => (
+                              <span key={p.id} className="inline-flex items-center rounded-md bg-primary/7 px-2 py-0.5 text-[11.5px] font-medium text-primary/80 border border-primary/10">
+                                {p.fullName}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <span className={`text-xs font-medium ${g.userId ? "text-green-600" : "text-muted-foreground"}`}>
+                          {g.userId ? "Active" : "Not created"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => setLinkFor(g.id)}><Link2 className="h-4 w-4 mr-1" /> Link pupil</Button>
+                          <Button variant="ghost" size="sm" disabled={!g.email} onClick={() => setAccountFor(g)}>
+                            <KeyRound className="h-4 w-4 mr-1" /> {g.userId ? "Reset login" : "Create login"}
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => setEditing(g)}><Pencil className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="sm" onClick={() => { if (confirm(`Delete parent "${g.fullName}"?`)) remove.mutate(g.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
             </TableBody>
           </Table>
         </div>
       </div>
-      {linkFor && <LinkPupilDialog guardianId={linkFor} onClose={() => { setLinkFor(null); qc.invalidateQueries({ queryKey: ["guardians"] }); }} />}
-      {accountFor && <ParentAccountDialog guardian={accountFor} onClose={() => { setAccountFor(null); qc.invalidateQueries({ queryKey: ["guardians"] }); }} />}
+      {editing && (
+        <Dialog open onOpenChange={() => setEditing(null)}>
+          <GuardianForm initial={editing} onSubmit={(f: any) => update.mutate({ id: editing.id, ...f })} />
+        </Dialog>
+      )}
+      {linkFor && <LinkPupilDialog guardianId={linkFor} onClose={() => { setLinkFor(null); invalidate(); }} />}
+      {accountFor && <ParentAccountDialog guardian={accountFor} onClose={() => { setAccountFor(null); invalidate(); }} />}
     </>
   );
 }
 
-function GuardianForm({ onSubmit }: any) {
-  const [f, setF] = useState({ fullName: "", relationship: "Father", phone: "", email: "", address: "", temporaryPassword: "" });
+function GuardianForm({ onSubmit, initial }: any) {
+  const [f, setF] = useState({
+    fullName: initial?.fullName ?? "", relationship: initial?.relationship ?? "Father",
+    phone: initial?.phone ?? "", email: initial?.email ?? "", address: initial?.address ?? "",
+    occupation: initial?.occupation ?? "", nationalId: initial?.nationalId ?? "",
+    temporaryPassword: "",
+  });
   const set = (k: string, v: any) => setF({ ...f, [k]: v });
   return (
     <DialogContent className="max-w-xl">
-      <DialogHeader><DialogTitle>New parent / guardian</DialogTitle></DialogHeader>
+      <DialogHeader><DialogTitle>{initial ? "Edit parent / guardian" : "New parent / guardian"}</DialogTitle></DialogHeader>
       <div className="space-y-3">
         <div><Label>Full name *</Label><Input value={f.fullName} onChange={(e) => set("fullName", e.target.value)} /></div>
         <div className="grid grid-cols-2 gap-3">
@@ -100,11 +156,17 @@ function GuardianForm({ onSubmit }: any) {
           <div><Label>Phone</Label><Input value={f.phone} onChange={(e) => set("phone", e.target.value)} /></div>
         </div>
         <div><Label>Email</Label><Input type="email" value={f.email} onChange={(e) => set("email", e.target.value)} /></div>
-        <div>
-          <Label>Temporary login password</Label>
-          <Input type="password" value={f.temporaryPassword} onChange={(e) => set("temporaryPassword", e.target.value)} placeholder="At least 8 characters (optional)" />
-          <p className="text-xs text-muted-foreground mt-1">When supplied, a parent login is created and the parent will be asked to change it.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div><Label>Occupation</Label><Input value={f.occupation} onChange={(e) => set("occupation", e.target.value)} /></div>
+          <div><Label>National ID</Label><Input value={f.nationalId} onChange={(e) => set("nationalId", e.target.value)} /></div>
         </div>
+        {!initial && (
+          <div>
+            <Label>Temporary login password</Label>
+            <Input type="password" value={f.temporaryPassword} onChange={(e) => set("temporaryPassword", e.target.value)} placeholder="At least 8 characters (optional)" />
+            <p className="text-xs text-muted-foreground mt-1">When supplied, a parent login is created and the parent will be asked to change it.</p>
+          </div>
+        )}
         <div><Label>Address</Label><Textarea rows={2} value={f.address} onChange={(e) => set("address", e.target.value)} /></div>
       </div>
       <DialogFooter><Button onClick={() => onSubmit(f)} disabled={!f.fullName}>Save</Button></DialogFooter>

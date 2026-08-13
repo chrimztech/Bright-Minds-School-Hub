@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { api } from "@/lib/api";
+import { api, type Payment } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,7 @@ export const Route = createFileRoute("/_authenticated/fees")({
 });
 
 function Fees() {
+  const { data: pending = [] } = useQuery({ queryKey: ["payments-pending"], queryFn: () => api.fees.payments.pending() });
   return (
     <>
       <PageHeader title="Fees & payments" description="Manage invoices, record payments, track balances" />
@@ -30,10 +31,14 @@ function Fees() {
           <TabsList>
             <TabsTrigger value="invoices">Invoices</TabsTrigger>
             <TabsTrigger value="payments">Payments</TabsTrigger>
+            <TabsTrigger value="pending">
+              Pending confirmations{pending.length > 0 && <Badge className="ml-1.5" variant="secondary">{pending.length}</Badge>}
+            </TabsTrigger>
             <TabsTrigger value="items">Fee items</TabsTrigger>
           </TabsList>
           <TabsContent value="invoices"><InvoicesTab /></TabsContent>
           <TabsContent value="payments"><PaymentsTab /></TabsContent>
+          <TabsContent value="pending"><PendingPaymentsTab /></TabsContent>
           <TabsContent value="items"><FeeItemsTab /></TabsContent>
         </Tabs>
       </div>
@@ -197,6 +202,7 @@ function InvoicePrint({ id, onClose }: { id: string; onClose: () => void }) {
 function PaymentsTab() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [receiptFor, setReceiptFor] = useState<Payment | null>(null);
   const [pupilFilter, setPupilFilter] = useState("");
   const { data: allPupils = [] } = useQuery({ queryKey: ["pupils-pay-filter"], queryFn: () => api.pupils.all() });
   const { data = [] } = useQuery({
@@ -257,9 +263,9 @@ function PaymentsTab() {
       </div>
       <div className="rounded-lg border bg-card">
         <Table>
-          <TableHeader><TableRow><TableHead>Receipt</TableHead><TableHead>Date</TableHead><TableHead>Pupil</TableHead><TableHead>Invoice</TableHead><TableHead>Method</TableHead><TableHead>Amount</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>Receipt</TableHead><TableHead>Date</TableHead><TableHead>Pupil</TableHead><TableHead>Invoice</TableHead><TableHead>Method</TableHead><TableHead>Amount</TableHead><TableHead>Status</TableHead><TableHead></TableHead></TableRow></TableHeader>
           <TableBody>
-            {data.length === 0 ? <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No payments yet.</TableCell></TableRow>
+            {data.length === 0 ? <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No payments yet.</TableCell></TableRow>
               : data.map((p) => (
                 <TableRow key={p.id}>
                   <TableCell className="font-mono text-xs">{p.receiptNo}</TableCell>
@@ -268,12 +274,121 @@ function PaymentsTab() {
                   <TableCell className="font-mono text-xs">{p.invoice?.invoiceNo ?? "—"}</TableCell>
                   <TableCell>{p.method}</TableCell>
                   <TableCell className="font-semibold">{money(p.amount)}</TableCell>
+                  <TableCell>
+                    <Badge variant={p.status === "CONFIRMED" ? "default" : p.status === "REJECTED" ? "destructive" : "secondary"}>{p.status}</Badge>
+                  </TableCell>
+                  <TableCell><Button size="icon" variant="ghost" onClick={() => setReceiptFor(p)}><Printer className="h-4 w-4" /></Button></TableCell>
                 </TableRow>
               ))}
           </TableBody>
         </Table>
       </div>
+      {receiptFor && <ReceiptPrint payment={receiptFor} onClose={() => setReceiptFor(null)} />}
     </div>
+  );
+}
+
+function PendingPaymentsTab() {
+  const qc = useQueryClient();
+  const { data = [], isLoading } = useQuery({ queryKey: ["payments-pending"], queryFn: () => api.fees.payments.pending() });
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["payments-pending"] });
+    qc.invalidateQueries({ queryKey: ["payments"] });
+    qc.invalidateQueries({ queryKey: ["invoices"] });
+  };
+  const confirm = useMutation({
+    mutationFn: (id: string) => api.fees.payments.confirm(id),
+    onSuccess: () => { invalidate(); toast.success("Payment confirmed and applied to invoice"); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const reject = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason?: string }) => api.fees.payments.reject(id, reason),
+    onSuccess: () => { invalidate(); toast.success("Payment rejected"); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  return (
+    <div className="space-y-3 pt-4">
+      <p className="text-sm text-muted-foreground">Payments parents have submitted from the portal, awaiting confirmation. Confirming applies the amount to the invoice; rejecting discards it.</p>
+      <div className="rounded-lg border bg-card">
+        <Table>
+          <TableHeader><TableRow><TableHead>Submitted</TableHead><TableHead>Pupil</TableHead><TableHead>Guardian</TableHead><TableHead>Invoice</TableHead><TableHead>Method</TableHead><TableHead>Reference</TableHead><TableHead className="text-right">Amount</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+          <TableBody>
+            {!isLoading && data.length === 0 ? (
+              <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No pending payment submissions.</TableCell></TableRow>
+            ) : (
+              data.map((p) => (
+                <TableRow key={p.id}>
+                  <TableCell>{p.paidOn}</TableCell>
+                  <TableCell className="font-medium">{p.pupil?.fullName}</TableCell>
+                  <TableCell>{p.submittedBy?.fullName ?? "—"}</TableCell>
+                  <TableCell className="font-mono text-xs">{p.invoice?.invoiceNo ?? "—"}</TableCell>
+                  <TableCell>{p.method.replace("_", " ")}</TableCell>
+                  <TableCell>{p.reference ?? "—"}</TableCell>
+                  <TableCell className="text-right font-semibold">{money(p.amount)}</TableCell>
+                  <TableCell className="text-right">
+                    <Button size="sm" onClick={() => confirm.mutate(p.id)} disabled={confirm.isPending || reject.isPending}>Confirm</Button>
+                    <Button size="sm" variant="ghost" className="text-destructive"
+                      onClick={() => { const reason = prompt("Reason for rejecting (optional):") ?? undefined; reject.mutate({ id: p.id, reason }); }}
+                      disabled={confirm.isPending || reject.isPending}>
+                      Reject
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}
+
+function ReceiptPrint({ payment, onClose }: { payment: Payment; onClose: () => void }) {
+  const { data: school } = useSchool();
+  const inv = payment.invoice;
+  const balance = inv ? Number(inv.total) - Number(inv.paid) : null;
+  return (
+    <PrintOverlay onClose={onClose}>
+      <div className="p-10 font-sans">
+        <DocHeader school={school} title="Receipt" />
+        <div className="grid grid-cols-2 gap-8 text-sm mb-8">
+          <div>
+            <p className="uppercase text-[10px] tracking-widest text-gray-500 mb-1">Received from</p>
+            <p className="font-semibold text-lg">{payment.pupil?.fullName}</p>
+            <p className="text-gray-600">Adm #: {payment.pupil?.admissionNo}</p>
+          </div>
+          <div className="text-right">
+            <p><span className="text-gray-500">Receipt no:</span> <span className="font-mono">{payment.receiptNo}</span></p>
+            <p><span className="text-gray-500">Date:</span> {payment.paidOn}</p>
+            <p><span className="text-gray-500">Method:</span> {payment.method.replace("_", " ")}</p>
+            {payment.reference && <p><span className="text-gray-500">Reference:</span> {payment.reference}</p>}
+          </div>
+        </div>
+        <table className="w-full text-sm border-collapse mb-8">
+          <thead><tr className="border-b-2 border-black text-left">
+            <th className="py-2">Description</th>
+            <th className="py-2 text-right">Amount</th>
+          </tr></thead>
+          <tbody>
+            <tr className="border-b border-gray-200">
+              <td className="py-3">{inv ? `Payment towards invoice ${inv.invoiceNo}${inv.description ? " — " + inv.description : ""}` : "School fee payment"}</td>
+              <td className="py-3 text-right">{money(payment.amount)}</td>
+            </tr>
+          </tbody>
+          {inv && (
+            <tfoot>
+              <tr><td className="pt-4 text-right text-gray-500">Invoice total</td><td className="pt-4 text-right">{money(inv.total)}</td></tr>
+              <tr><td className="text-right text-gray-500">Total paid to date</td><td className="text-right">{money(inv.paid)}</td></tr>
+              <tr className="text-lg font-bold"><td className="pt-2 text-right">Balance remaining</td><td className="pt-2 text-right">{money(balance ?? 0)}</td></tr>
+            </tfoot>
+          )}
+        </table>
+        <div className="border-t border-gray-300 pt-6 text-xs text-gray-500 flex justify-between">
+          <p>Thank you for partnering with us in your child's education.</p>
+          <p>Generated {new Date().toLocaleString()}</p>
+        </div>
+      </div>
+    </PrintOverlay>
   );
 }
 

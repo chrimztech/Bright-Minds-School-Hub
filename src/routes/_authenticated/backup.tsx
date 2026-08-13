@@ -14,7 +14,24 @@ export const Route = createFileRoute("/_authenticated/backup")({
 
 function BackupPage() {
   const [busy, setBusy] = useState(false);
+  const [sqlBusy, setSqlBusy] = useState(false);
   const [last, setLast] = useState<{ at: string; tables: number; rows: number } | null>(null);
+  const [lastSql, setLastSql] = useState<string | null>(null);
+
+  async function downloadSql() {
+    setSqlBusy(true);
+    try {
+      const { blob, filename } = await api.admin.backupSql();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);
+      setLastSql(new Date().toLocaleString());
+      toast.success("Full database backup downloaded");
+    } catch (err: any) {
+      toast.error(err.message ?? "Backup failed");
+    } finally {
+      setSqlBusy(false);
+    }
+  }
 
   async function download(kind: "json" | "csv") {
     setBusy(true);
@@ -56,22 +73,42 @@ function BackupPage() {
   return (
     <>
       <PageHeader title="System backup" description="Download a snapshot of every record in the system" />
-      <div className="p-6 max-w-3xl">
+      <div className="p-6 max-w-3xl space-y-6">
         <Card>
-          <CardHeader><CardTitle className="font-display text-xl flex items-center gap-2"><DatabaseBackup className="h-5 w-5" /> Full database snapshot</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="font-display text-xl flex items-center gap-2"><DatabaseBackup className="h-5 w-5" /> Full database backup</CardTitle></CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">Backups include pupils, staff, parents, classes, attendance, fees, payments, marks, payroll, library, transport, health, discipline, communications and more. Save backups in a safe place — they contain personal information.</p>
+            <p className="text-sm text-muted-foreground">
+              A complete, restorable SQL dump of the entire database — every table, not just the ones listed below.
+              This is the file to keep for disaster recovery; restore it with <code className="font-mono">psql -f backup.sql</code>.
+              Save it in a safe place — it contains personal information.
+            </p>
+            <Button onClick={downloadSql} disabled={sqlBusy}><Download className="h-4 w-4 mr-1" /> {sqlBusy ? "Preparing…" : "Download full SQL backup"}</Button>
+            {lastSql && (
+              <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+                <p className="font-medium">Last full backup</p>
+                <p className="text-muted-foreground">{lastSql}</p>
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">For best practice, schedule a weekly backup and store off-site.</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle className="font-display text-lg">Records export</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              A human-readable export of core records (pupils, staff, classes, attendance, fees, marks, library, and more) as JSON or CSV — handy for reporting, not a substitute for the full backup above.
+            </p>
             <div className="flex flex-wrap gap-2">
-              <Button onClick={() => download("json")} disabled={busy}><Download className="h-4 w-4 mr-1" /> {busy ? "Preparing…" : "Download JSON"}</Button>
+              <Button variant="outline" onClick={() => download("json")} disabled={busy}><Download className="h-4 w-4 mr-1" /> {busy ? "Preparing…" : "Download JSON"}</Button>
               <Button variant="outline" onClick={() => download("csv")} disabled={busy}><Download className="h-4 w-4 mr-1" /> Download CSV</Button>
             </div>
             {last && (
               <div className="rounded-lg border bg-muted/30 p-3 text-sm">
-                <p className="font-medium">Last backup</p>
+                <p className="font-medium">Last export</p>
                 <p className="text-muted-foreground">{last.at} · {last.tables} tables · {last.rows.toLocaleString()} rows</p>
               </div>
             )}
-            <p className="text-xs text-muted-foreground">For best practice, schedule a weekly backup and store off-site.</p>
           </CardContent>
         </Card>
       </div>

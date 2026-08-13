@@ -5,7 +5,7 @@ type AuthCtx = {
   user: AuthUser | null;
   loading: boolean;
   roles: string[];
-  login: (email: string, password: string) => Promise<{ mustChangePassword: boolean }>;
+  login: (identifier: string, password: string) => Promise<{ mustChangePassword: boolean }>;
   signOut: () => void;
 };
 
@@ -27,8 +27,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const res = await api.auth.login(email, password);
+  const login = useCallback(async (identifier: string, password: string) => {
+    const res = await api.auth.login(identifier, password);
     const authUser: AuthUser = {
       userId: res.userId,
       email: res.email,

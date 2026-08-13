@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { api, type ParentReportCard } from "@/lib/api";
+import { api, type Invoice, type ParentReportCard } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -10,9 +10,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { money } from "@/lib/format";
 import { EmptyState } from "@/components/EmptyState";
-import { Megaphone, Wallet, ClipboardCheck, GraduationCap, TrendingUp, UserRound, FileText } from "lucide-react";
+import { Megaphone, Wallet, ClipboardCheck, GraduationCap, TrendingUp, UserRound, FileText, CreditCard } from "lucide-react";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/portal")({
   head: () => ({ meta: [{ title: "Parent portal" }] }),
@@ -44,6 +48,12 @@ function ParentPortal() {
     queryKey: ["my-invoices"],
     enabled: !!guardian,
     queryFn: () => api.guardians.myInvoices(),
+  });
+
+  const { data: paymentClaims = [] } = useQuery({
+    queryKey: ["my-payment-claims"],
+    enabled: !!guardian,
+    queryFn: () => api.guardians.myPaymentClaims(),
   });
 
   const to = new Date().toISOString().slice(0, 10);
@@ -213,23 +223,61 @@ function ParentPortal() {
                       <TableHead className="text-right">Paid</TableHead>
                       <TableHead className="text-right">Balance</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {invoices.length === 0
-                      ? <TableRow><TableCell colSpan={7}><EmptyState message="No invoices found." /></TableCell></TableRow>
-                      : invoices.map((i) => (
-                        <TableRow key={i.id}>
-                          <TableCell>{i.pupil?.fullName}</TableCell>
-                          <TableCell className="font-mono text-xs">{i.invoiceNo}</TableCell>
-                          <TableCell>{i.description ?? "—"}</TableCell>
-                          <TableCell className="text-right">{money(i.total)}</TableCell>
-                          <TableCell className="text-right">{money(i.paid)}</TableCell>
-                          <TableCell className="text-right font-medium">{money(Number(i.total) - Number(i.paid))}</TableCell>
+                      ? <TableRow><TableCell colSpan={8}><EmptyState message="No invoices found." /></TableCell></TableRow>
+                      : invoices.map((i) => {
+                        const bal = Number(i.total) - Number(i.paid);
+                        return (
+                          <TableRow key={i.id}>
+                            <TableCell>{i.pupil?.fullName}</TableCell>
+                            <TableCell className="font-mono text-xs">{i.invoiceNo}</TableCell>
+                            <TableCell>{i.description ?? "—"}</TableCell>
+                            <TableCell className="text-right">{money(i.total)}</TableCell>
+                            <TableCell className="text-right">{money(i.paid)}</TableCell>
+                            <TableCell className="text-right font-medium">{money(bal)}</TableCell>
+                            <TableCell>
+                              <Badge variant={i.status === "PAID" ? "default" : i.status === "PARTIAL" ? "secondary" : "destructive"}>
+                                {i.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {bal > 0 && <SubmitPaymentDialog invoice={i} />}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            <Card className="mt-4">
+              <CardHeader><CardTitle className="text-base">My payment submissions</CardTitle></CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow><TableHead>Date</TableHead><TableHead>Invoice</TableHead><TableHead>Method</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead></TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paymentClaims.length === 0
+                      ? <TableRow><TableCell colSpan={5}><EmptyState message="You haven't submitted any payments yet." /></TableCell></TableRow>
+                      : paymentClaims.map((p) => (
+                        <TableRow key={p.id}>
+                          <TableCell>{p.paidOn}</TableCell>
+                          <TableCell className="font-mono text-xs">{p.invoice?.invoiceNo ?? "—"}</TableCell>
+                          <TableCell>{p.method.replace("_", " ")}</TableCell>
+                          <TableCell className="text-right font-medium">{money(p.amount)}</TableCell>
                           <TableCell>
-                            <Badge variant={i.status === "PAID" ? "default" : i.status === "PARTIAL" ? "secondary" : "destructive"}>
-                              {i.status}
+                            <Badge variant={p.status === "CONFIRMED" ? "default" : p.status === "REJECTED" ? "destructive" : "secondary"}>
+                              {p.status}
                             </Badge>
+                            {p.status === "REJECTED" && p.rejectionReason && (
+                              <p className="text-xs text-muted-foreground mt-0.5">{p.rejectionReason}</p>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -346,6 +394,47 @@ function ParentReportCardView({ report }: { report: ParentReportCard }) {
         <Button variant="outline" size="sm" onClick={() => window.print()}>Print</Button>
       </div>
     </div>
+  );
+}
+
+function SubmitPaymentDialog({ invoice }: { invoice: Invoice }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const balance = Number(invoice.total) - Number(invoice.paid);
+  const [f, setF] = useState({ amount: balance, method: "BANK", reference: "" });
+  const submit = useMutation({
+    mutationFn: () => api.guardians.submitPayment({ invoiceId: invoice.id, amount: f.amount, method: f.method, reference: f.reference || undefined }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["my-payment-claims"] });
+      toast.success("Payment submitted — the school will confirm it shortly");
+      setOpen(false);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  return (
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (v) setF({ amount: balance, method: "BANK", reference: "" }); }}>
+      <DialogTrigger asChild><Button size="sm" variant="outline"><CreditCard className="h-3.5 w-3.5 mr-1" /> I've paid</Button></DialogTrigger>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Submit a payment</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Invoice <span className="font-mono text-foreground">{invoice.invoiceNo}</span> — balance {money(balance)}.
+            Let the school know you've paid; they'll confirm it against your account.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Amount paid</Label><Input type="number" value={f.amount} onChange={(e) => setF({ ...f, amount: Number(e.target.value) })} /></div>
+            <div><Label>Method</Label>
+              <Select value={f.method} onValueChange={(v) => setF({ ...f, method: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{["BANK", "MOBILE_MONEY", "CASH", "CARD", "CHEQUE", "ONLINE"].map((m) => <SelectItem key={m} value={m}>{m.replace("_", " ")}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div><Label>Reference / transaction ID</Label><Input value={f.reference} onChange={(e) => setF({ ...f, reference: e.target.value })} placeholder="e.g. bank transfer reference or mobile money code" /></div>
+        </div>
+        <DialogFooter><Button onClick={() => submit.mutate()} disabled={!f.amount || f.amount <= 0 || submit.isPending}>{submit.isPending ? "Submitting…" : "Submit"}</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
