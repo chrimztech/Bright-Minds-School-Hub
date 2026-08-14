@@ -11,7 +11,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { money } from "@/lib/format";
 import { ArrowLeft, Users, Wallet, ClipboardCheck, HeartPulse, Shield } from "lucide-react";
 
-export const Route = createFileRoute("/_authenticated/pupils/$pupilId")({
+export const Route = createFileRoute("/_authenticated/pupils_/$pupilId")({
   head: () => ({ meta: [{ title: "Pupil profile" }] }),
   component: PupilDetail,
 });

@@ -154,7 +154,7 @@ function StaffForm({ onSubmit, initial }: any) {
     contractEndDate: initial?.contractEndDate ?? "",
     dateJoined: initial?.dateJoined ?? new Date().toISOString().slice(0, 10),
     basicSalary: initial?.basicSalary ?? 0, bankName: initial?.bankName ?? "", bankAccount: initial?.bankAccount ?? "",
-    nextOfKin: initial?.nextOfKin ?? "", photoUrl: initial?.photoUrl ?? "", isTeacher: initial?.isTeacher ?? true,
+    nextOfKin: initial?.nextOfKin ?? "", photoUrl: initial?.photoUrl ?? "", signatureUrl: initial?.signatureUrl ?? "", isTeacher: initial?.isTeacher ?? true,
     roleCategory: isKnownCategory ? initialCategory : (initialCategory ? "Other" : ""),
     roleCategoryOther: isKnownCategory ? "" : initialCategory,
     temporaryPassword: "",
@@ -198,6 +198,11 @@ function StaffForm({ onSubmit, initial }: any) {
           <div className="grid grid-cols-2 gap-3">
             <div><Label>Next of kin</Label><Input placeholder="Name & phone" value={f.nextOfKin} onChange={(e) => set("nextOfKin", e.target.value)} /></div>
             <div><Label>Photo URL</Label><Input placeholder="https://…" value={f.photoUrl} onChange={(e) => set("photoUrl", e.target.value)} /></div>
+          </div>
+          <div>
+            <Label>Signature URL</Label>
+            <Input placeholder="https://… (image of their signature)" value={f.signatureUrl} onChange={(e) => set("signatureUrl", e.target.value)} />
+            <p className="text-xs text-muted-foreground mt-1">Used to stamp their signature on report cards when they're a class teacher.</p>
           </div>
           {!initial && (
             <div>

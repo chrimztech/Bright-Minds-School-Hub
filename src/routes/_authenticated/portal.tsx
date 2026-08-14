@@ -15,7 +15,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { money } from "@/lib/format";
 import { EmptyState } from "@/components/EmptyState";
-import { Megaphone, Wallet, ClipboardCheck, GraduationCap, TrendingUp, UserRound, FileText, CreditCard } from "lucide-react";
+import { Megaphone, Wallet, ClipboardCheck, GraduationCap, TrendingUp, UserRound, FileText, CreditCard, Download } from "lucide-react";
+import { PrintOverlay, DocHeader, useSchool } from "@/components/PrintableDoc";
+
+const GC: Record<string, string> = { A: "#16a34a", B: "#2563eb", C: "#ca8a04", D: "#ea580c", E: "#dc2626" };
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/portal")({
@@ -359,6 +362,8 @@ function PerformanceTab({ pupils }: { pupils: any[] }) {
 
 function ParentReportCardView({ report }: { report: ParentReportCard }) {
   const teacher = report.schoolClass?.classTeacher;
+  const { data: school } = useSchool();
+  const [printOpen, setPrintOpen] = useState(false);
   return (
     <div className="space-y-5">
       <div className="rounded-xl border bg-muted/20 p-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -389,9 +394,132 @@ function ParentReportCardView({ report }: { report: ParentReportCard }) {
           ))}</TableBody>
         </Table>
       </div>
+      {(report.classTeacherRemark || report.headTeacherRemark) && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {report.classTeacherRemark && (
+            <div className="rounded-lg border p-3 text-sm">
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Class teacher's remarks</p>
+              <p>{report.classTeacherRemark}</p>
+            </div>
+          )}
+          {report.headTeacherRemark && (
+            <div className="rounded-lg border p-3 text-sm">
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Head teacher's remarks</p>
+              <p>{report.headTeacherRemark}</p>
+            </div>
+          )}
+        </div>
+      )}
       <div className="flex items-center justify-between text-sm">
         <span className="text-muted-foreground"><FileText className="inline h-4 w-4 mr-1" /> Historical class and teacher details are preserved after promotion.</span>
-        <Button variant="outline" size="sm" onClick={() => window.print()}>Print</Button>
+        <Button variant="outline" size="sm" onClick={() => setPrintOpen(true)}><Download className="h-4 w-4 mr-1" /> Download report card</Button>
+      </div>
+      {printOpen && (
+        <PrintOverlay onClose={() => setPrintOpen(false)}>
+          <ParentReportCardPrint school={school} report={report} />
+        </PrintOverlay>
+      )}
+    </div>
+  );
+}
+
+function ParentReportCardPrint({ school, report }: { school: any; report: ParentReportCard }) {
+  const att = report.attendance;
+  return (
+    <div className="p-10 font-sans text-black text-sm">
+      <DocHeader school={{ ...school, logoUrl: school?.logoUrl ?? "/logo.png" }} title="Pupil Report Card" />
+
+      <div className="flex justify-between text-xs text-gray-600 mb-5">
+        {report.termName && <span>Term: <strong>{report.termName}</strong>{report.academicYearName ? ` · ${report.academicYearName}` : ""}</span>}
+        <span>Assessment: <strong>{report.examName}{report.assessmentType ? ` (${report.assessmentType.replace("_", " ")})` : ""}</strong></span>
+        {report.examDate && <span>Date: <strong>{new Date(report.examDate).toLocaleDateString()}</strong></span>}
+      </div>
+
+      <table className="w-full border border-gray-300 mb-5 text-sm">
+        <tbody>
+          <tr className="bg-gray-50">
+            <td className="border border-gray-300 px-3 py-1.5"><span className="text-gray-500">Full name: </span><strong>{report.pupilName}</strong></td>
+            <td className="border border-gray-300 px-3 py-1.5"><span className="text-gray-500">Adm No: </span><strong className="font-mono">{report.admissionNo}</strong></td>
+          </tr>
+          <tr>
+            <td className="border border-gray-300 px-3 py-1.5" colSpan={2}><span className="text-gray-500">Class: </span><strong>{report.schoolClass?.name ?? "—"}{report.schoolClass?.stream ? " " + report.schoolClass.stream : ""}</strong></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">Academic Performance</p>
+      <table className="w-full border-collapse mb-5 text-sm">
+        <thead>
+          <tr className="bg-gray-100 border-b-2 border-black">
+            <th className="text-left py-2 px-2">Subject</th>
+            <th className="text-center py-2 px-2">Score</th>
+            <th className="text-center py-2 px-2">Out of</th>
+            <th className="text-center py-2 px-2">%</th>
+            <th className="text-center py-2 px-2">Grade</th>
+            <th className="text-left py-2 px-2">Comment</th>
+          </tr>
+        </thead>
+        <tbody>
+          {report.subjects.length === 0
+            ? <tr><td colSpan={6} className="text-center py-4 text-gray-400">No marks recorded.</td></tr>
+            : report.subjects.map((s, i) => (
+              <tr key={s.subjectId} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                <td className="py-1.5 px-2 border-b border-gray-200">{s.subjectName}</td>
+                <td className="py-1.5 px-2 border-b border-gray-200 text-center font-mono font-semibold">{s.score}</td>
+                <td className="py-1.5 px-2 border-b border-gray-200 text-center text-gray-500">{s.outOf}</td>
+                <td className="py-1.5 px-2 border-b border-gray-200 text-center">{s.percentage.toFixed(1)}%</td>
+                <td className="py-1.5 px-2 border-b border-gray-200 text-center font-bold" style={{ color: GC[s.grade] ?? "#000" }}>{s.grade}</td>
+                <td className="py-1.5 px-2 border-b border-gray-200 text-gray-600">{s.comment ?? "—"}</td>
+              </tr>
+            ))}
+        </tbody>
+      </table>
+
+      <div className="border-2 border-gray-300 rounded p-3 grid grid-cols-3 gap-4 text-center mb-5">
+        <div><p className="text-xs text-gray-500 uppercase">Total</p><p className="text-2xl font-bold">{report.totalScore}<span className="text-sm text-gray-400">/{report.totalOutOf}</span></p></div>
+        <div><p className="text-xs text-gray-500 uppercase">Average</p><p className="text-2xl font-bold">{report.averagePercentage.toFixed(1)}%</p></div>
+        <div><p className="text-xs text-gray-500 uppercase">Overall grade</p><p className="text-3xl font-bold" style={{ color: GC[report.overallGrade] ?? "#000" }}>{report.overallGrade}</p></div>
+      </div>
+
+      <div className="border border-gray-300 rounded p-3 grid grid-cols-4 gap-3 text-center mb-5">
+        <div><p className="text-xs text-gray-500">Present</p><p className="font-bold text-green-700">{att.present}</p></div>
+        <div><p className="text-xs text-gray-500">Absent</p><p className="font-bold text-red-600">{att.absent}</p></div>
+        <div><p className="text-xs text-gray-500">Late</p><p className="font-bold text-orange-500">{att.late}</p></div>
+        <div><p className="text-xs text-gray-500">Attendance rate</p><p className="font-bold">{att.percentage.toFixed(1)}%</p></div>
+      </div>
+
+      {(report.classTeacherRemark || report.headTeacherRemark) && (
+        <div className="grid grid-cols-2 gap-4 mb-5">
+          <div className="border border-gray-300 rounded p-3 min-h-[56px]">
+            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Class teacher's remarks</p>
+            <p className="text-sm">{report.classTeacherRemark || " "}</p>
+          </div>
+          <div className="border border-gray-300 rounded p-3 min-h-[56px]">
+            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Head teacher's remarks</p>
+            <p className="text-sm">{report.headTeacherRemark || " "}</p>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-16 mt-8">
+        {[
+          { title: "Class Teacher", name: report.schoolClass?.classTeacher?.fullName, signatureUrl: report.schoolClass?.classTeacher?.signatureUrl },
+          { title: "Head Teacher / Principal", name: school?.headTeacher, signatureUrl: school?.headTeacherSignatureUrl },
+        ].map(({ title, name, signatureUrl }) => (
+          <div key={title}>
+            {signatureUrl && <img src={signatureUrl} alt="" className="h-12 object-contain object-left" />}
+            <div className="mt-2 border-t border-black pt-2">
+              <p className="text-xs">{title}</p>
+              <p className="text-xs text-gray-400 mt-1">Name: {name || "_________________________"} Sign: _____________</p>
+              <p className="text-xs text-gray-400 mt-1">Date: _________________________</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-8 pt-4 border-t border-gray-200 flex justify-between text-xs text-gray-400">
+        <p>Next term begins: _________________________</p>
+        <p>Generated {new Date().toLocaleString()}</p>
       </div>
     </div>
   );

@@ -9,8 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Pencil, Trash2, Users, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Users, X, Printer } from "lucide-react";
 import { toast } from "sonner";
+import { PrintOverlay, DocHeader, useSchool } from "@/components/PrintableDoc";
 
 export const Route = createFileRoute("/_authenticated/classes")({
   head: () => ({ meta: [{ title: "Classes" }] }),
@@ -112,6 +113,8 @@ function RosterDialog({ schoolClass }: { schoolClass: SchoolClass }) {
   const qc = useQueryClient();
   const [addId, setAddId] = useState("");
   const [search, setSearch] = useState("");
+  const [printOpen, setPrintOpen] = useState(false);
+  const { data: school } = useSchool();
 
   const { data: inClass = [], isLoading } = useQuery({
     queryKey: ["pupils-by-class", schoolClass.id],
@@ -141,7 +144,12 @@ function RosterDialog({ schoolClass }: { schoolClass: SchoolClass }) {
   return (
     <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
       <DialogHeader>
-        <DialogTitle>{schoolClass.name}{schoolClass.stream ? " " + schoolClass.stream : ""} roster</DialogTitle>
+        <DialogTitle className="flex items-center justify-between gap-2 pr-6">
+          <span>{schoolClass.name}{schoolClass.stream ? " " + schoolClass.stream : ""} roster</span>
+          <Button variant="outline" size="sm" onClick={() => setPrintOpen(true)} disabled={inClass.length === 0}>
+            <Printer className="h-3.5 w-3.5 mr-1.5" />Print register
+          </Button>
+        </DialogTitle>
       </DialogHeader>
       <div className="space-y-4">
         <div className="flex items-end gap-2">
@@ -202,7 +210,53 @@ function RosterDialog({ schoolClass }: { schoolClass: SchoolClass }) {
           </div>
         </div>
       </div>
+      {printOpen && (
+        <PrintOverlay onClose={() => setPrintOpen(false)}>
+          <ClassRegisterPrint school={school} schoolClass={schoolClass} pupils={inClass} />
+        </PrintOverlay>
+      )}
     </DialogContent>
+  );
+}
+
+function ClassRegisterPrint({ school, schoolClass, pupils }: any) {
+  return (
+    <div className="p-8 bg-white text-black" style={{ minWidth: 700 }}>
+      <DocHeader school={{ ...school, logoUrl: school?.logoUrl ?? "/logo.png" }} title="Class Register" />
+      <p className="text-sm mb-4">
+        Class: <span className="font-medium">{schoolClass.name}{schoolClass.stream ? " " + schoolClass.stream : ""}</span>
+        {"   "}Class teacher: <span className="font-medium">{schoolClass.classTeacher?.fullName ?? "—"}</span>
+        {"   "}Total pupils: <span className="font-medium">{pupils.length}</span>
+      </p>
+      <table className="w-full border-collapse text-xs">
+        <thead>
+          <tr>
+            <th className="border border-gray-300 p-1.5 w-8 text-left">#</th>
+            <th className="border border-gray-300 p-1.5 text-left">Admission No.</th>
+            <th className="border border-gray-300 p-1.5 text-left">Full name</th>
+            <th className="border border-gray-300 p-1.5 text-left w-16">Gender</th>
+            <th className="border border-gray-300 p-1.5 text-left w-24">Date of birth</th>
+            <th className="border border-gray-300 p-1.5 text-left w-20">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {pupils.map((p: Pupil, idx: number) => (
+            <tr key={p.id}>
+              <td className="border border-gray-300 p-1.5">{idx + 1}</td>
+              <td className="border border-gray-300 p-1.5 font-mono">{p.admissionNo}</td>
+              <td className="border border-gray-300 p-1.5">{p.fullName}</td>
+              <td className="border border-gray-300 p-1.5">{p.gender ?? "—"}</td>
+              <td className="border border-gray-300 p-1.5">{p.dob ?? "—"}</td>
+              <td className="border border-gray-300 p-1.5">{p.status}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="grid grid-cols-2 gap-16 mt-10">
+        <div className="border-t border-black pt-2"><p className="text-xs">Class Teacher signature</p></div>
+        <div className="border-t border-black pt-2"><p className="text-xs">Head Teacher signature</p></div>
+      </div>
+    </div>
   );
 }
 

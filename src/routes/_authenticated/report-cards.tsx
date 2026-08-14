@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { api, type Mark, type Pupil } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -106,15 +107,31 @@ function ReportCardsPage() {
 
 // ─── Tab 1: Individual report card ────────────────────────────────────────────
 function ReportCardTab({ isParentOnly }: { isParentOnly: boolean }) {
+  const qc = useQueryClient();
   const [termId, setTermId] = useState("");
   const [examId, setExamId] = useState("");
   const [pupilId, setPupilId] = useState("");
-  const [remarks, setRemarks] = useState("");
+  const [classTeacherRemark, setClassTeacherRemark] = useState("");
+  const [headTeacherRemark, setHeadTeacherRemark] = useState("");
   const [printOpen, setPrintOpen] = useState(false);
   const [batchClassId, setBatchClassId] = useState("");
   const [batchOpen, setBatchOpen] = useState(false);
 
   const { data: school } = useSchool();
+  const { data: savedRemark } = useQuery({
+    queryKey: ["report-card-remark", pupilId, examId],
+    enabled: !isParentOnly && !!pupilId && !!examId,
+    queryFn: () => api.reportCardRemarks.get(pupilId, examId),
+  });
+  useEffect(() => {
+    setClassTeacherRemark(savedRemark?.classTeacherRemark ?? "");
+    setHeadTeacherRemark(savedRemark?.headTeacherRemark ?? "");
+  }, [savedRemark]);
+  const saveRemark = useMutation({
+    mutationFn: () => api.reportCardRemarks.save({ pupilId, examId, classTeacherRemark, headTeacherRemark }),
+    onSuccess: () => { toast.success("Remarks saved"); qc.invalidateQueries({ queryKey: ["report-card-remark", pupilId, examId] }); },
+    onError: (e: any) => toast.error(e.message),
+  });
   const { data: terms = [] } = useQuery({ queryKey: ["terms-all"], queryFn: () => api.academicYears.terms.all() });
   const { data: exams = [] } = useQuery({ queryKey: ["exams-rc", termId], queryFn: () => api.exams.list(termId || undefined) });
   const { data: classes = [] } = useQuery({ queryKey: ["classes-rc"], enabled: !isParentOnly, queryFn: () => api.classes.list() });
@@ -201,11 +218,22 @@ function ReportCardTab({ isParentOnly }: { isParentOnly: boolean }) {
         )}
       </div>
 
-      {/* Teacher remarks */}
+      {/* Teacher & head teacher remarks */}
       {ready && !isParentOnly && (
-        <div className="max-w-lg">
-          <Label className="text-xs text-muted-foreground">Class teacher's remarks (printed on report card)</Label>
-          <Textarea rows={2} placeholder="e.g. A hardworking and focused pupil. Keep it up!" value={remarks} onChange={e => setRemarks(e.target.value)} className="mt-1" />
+        <div className="max-w-3xl grid sm:grid-cols-2 gap-4 items-end">
+          <div>
+            <Label className="text-xs text-muted-foreground">Class teacher's remarks (printed on report card)</Label>
+            <Textarea rows={2} placeholder="e.g. A hardworking and focused pupil. Keep it up!" value={classTeacherRemark} onChange={e => setClassTeacherRemark(e.target.value)} className="mt-1" />
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Head teacher's remarks (printed on report card)</Label>
+            <Textarea rows={2} placeholder="e.g. Promoted to the next grade." value={headTeacherRemark} onChange={e => setHeadTeacherRemark(e.target.value)} className="mt-1" />
+          </div>
+          <div className="sm:col-span-2">
+            <Button size="sm" variant="outline" onClick={() => saveRemark.mutate()} disabled={saveRemark.isPending}>
+              {saveRemark.isPending ? "Saving…" : "Save remarks"}
+            </Button>
+          </div>
         </div>
       )}
 
@@ -306,7 +334,7 @@ function ReportCardTab({ isParentOnly }: { isParentOnly: boolean }) {
       {/* Individual print overlay */}
       {printOpen && ready && (
         <PrintOverlay onClose={() => setPrintOpen(false)}>
-          <ReportCardPrint school={school} pupil={pupil} exam={exam} marks={myMarks} term={selectedTerm} attendance={attendance} position={myRank?.position ?? null} classSize={ranking.length} remarks={remarks} />
+          <ReportCardPrint school={school} pupil={pupil} exam={exam} marks={myMarks} term={selectedTerm} attendance={attendance} position={myRank?.position ?? null} classSize={ranking.length} classTeacherRemark={classTeacherRemark} headTeacherRemark={headTeacherRemark} />
         </PrintOverlay>
       )}
 
@@ -315,7 +343,7 @@ function ReportCardTab({ isParentOnly }: { isParentOnly: boolean }) {
         <PrintOverlay onClose={() => setBatchOpen(false)}>
           {batchRanked.map(({ pupil: p, marks: pm, position, average }, i) => (
             <div key={p.id} style={{ pageBreakAfter: i < batchRanked.length - 1 ? "always" : "auto" }}>
-              <ReportCardPrint school={school} pupil={p} exam={exam} marks={pm} term={selectedTerm} attendance={[]} position={position} classSize={batchRanked.length} remarks="" />
+              <ReportCardPrint school={school} pupil={p} exam={exam} marks={pm} term={selectedTerm} attendance={[]} position={position} classSize={batchRanked.length} classTeacherRemark="" headTeacherRemark="" />
             </div>
           ))}
         </PrintOverlay>
@@ -325,7 +353,8 @@ function ReportCardTab({ isParentOnly }: { isParentOnly: boolean }) {
 }
 
 // ─── Printable report card ─────────────────────────────────────────────────────
-function ReportCardPrint({ school, pupil, exam, marks, term, attendance, position, classSize, remarks }: any) {
+function ReportCardPrint({ school, pupil, exam, marks, term, attendance, position, classSize, classTeacherRemark, headTeacherRemark }: any) {
+  const classTeacher = pupil.schoolClass?.classTeacher;
   const outOf = exam.outOf;
   const total = marks.reduce((s: number, m: Mark) => s + Number(m.score), 0);
   const maxTotal = marks.length * outOf;
@@ -413,18 +442,28 @@ function ReportCardPrint({ school, pupil, exam, marks, term, attendance, positio
       )}
 
       {/* Remarks */}
-      <div className="border border-gray-300 rounded p-3 mb-6 min-h-[56px]">
-        <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Class teacher's remarks</p>
-        <p className="text-sm">{remarks || " "}</p>
+      <div className="grid grid-cols-2 gap-4 mb-6">
+        <div className="border border-gray-300 rounded p-3 min-h-[56px]">
+          <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Class teacher's remarks</p>
+          <p className="text-sm">{classTeacherRemark || " "}</p>
+        </div>
+        <div className="border border-gray-300 rounded p-3 min-h-[56px]">
+          <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Head teacher's remarks</p>
+          <p className="text-sm">{headTeacherRemark || " "}</p>
+        </div>
       </div>
 
       {/* Signatures */}
       <div className="grid grid-cols-2 gap-16 mt-8">
-        {[["Class Teacher", ""], ["Head Teacher / Principal", ""]].map(([title]) => (
+        {[
+          { title: "Class Teacher", name: classTeacher?.fullName, signatureUrl: classTeacher?.signatureUrl },
+          { title: "Head Teacher / Principal", name: school?.headTeacher, signatureUrl: school?.headTeacherSignatureUrl },
+        ].map(({ title, name, signatureUrl }) => (
           <div key={title}>
-            <div className="mt-10 border-t border-black pt-2">
+            {signatureUrl && <img src={signatureUrl} alt="" className="h-12 object-contain object-left" />}
+            <div className="mt-2 border-t border-black pt-2">
               <p className="text-xs">{title}</p>
-              <p className="text-xs text-gray-400 mt-1">Name: _________________________ Sign: _____________</p>
+              <p className="text-xs text-gray-400 mt-1">Name: {name || "_________________________"} Sign: _____________</p>
               <p className="text-xs text-gray-400 mt-1">Date: _________________________</p>
             </div>
           </div>

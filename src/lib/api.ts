@@ -137,6 +137,8 @@ export const api = {
     list: (date: string, classId?: string) => get<Attendance[]>("/attendance", { date, classId }),
     byPupil: (pupilId: string, from: string, to: string) =>
       get<Attendance[]>(`/attendance/pupil/${pupilId}`, { from, to }),
+    range: (classId: string, from: string, to: string) =>
+      get<Attendance[]>("/attendance/range", { classId, from, to }),
     create: (data: Partial<Attendance>) => post<Attendance>("/attendance", data),
     bulkCreate: (data: Partial<Attendance>[]) => post<Attendance[]>("/attendance/bulk", data),
     update: (id: string, data: Partial<Attendance>) => put<Attendance>(`/attendance/${id}`, data),
@@ -415,6 +417,12 @@ export const api = {
     get: () => get<ReportData>("/reports/summary"),
   },
 
+  reportCardRemarks: {
+    get: (pupilId: string, examId: string) => get<ReportCardRemark | null>("/report-cards/remarks", { pupilId, examId }),
+    save: (data: { pupilId: string; examId: string; classTeacherRemark?: string; headTeacherRemark?: string }) =>
+      put<ReportCardRemark>("/report-cards/remarks", data),
+  },
+
   admin: {
     backup: () => get<Record<string, unknown>>("/admin/backup"),
     backupSql: async () => {
@@ -478,7 +486,7 @@ export const api = {
 export interface PageResponse<T> { content: T[]; page: number; size: number; totalElements: number; totalPages: number; }
 export interface DashboardData { totalPupils: number; activeStaff: number; totalClasses: number; presentToday: number; collectedThisMonth: number; recentAnnouncements: { id: string; title: string; createdAt: string }[]; }
 export interface Pupil { id: string; admissionNo: string; fullName: string; gender?: string; dob?: string; status: string; schoolClass?: SchoolClass; classId?: string; address?: string; phone?: string; photoUrl?: string; bloodGroup?: string; allergies?: string; medicalInfo?: string; }
-export interface Staff { id: string; staffNo: string; fullName: string; gender?: string; email?: string; phone?: string; isTeacher: boolean; status: string; basicSalary?: number; photoUrl?: string; employmentType?: string; contractEndDate?: string; roleCategory?: string; userId?: string; }
+export interface Staff { id: string; staffNo: string; fullName: string; gender?: string; email?: string; phone?: string; isTeacher: boolean; status: string; basicSalary?: number; photoUrl?: string; signatureUrl?: string; employmentType?: string; contractEndDate?: string; roleCategory?: string; userId?: string; }
 export interface SchoolClass { id: string; name: string; stream?: string; levelOrder: number; capacity?: number; classTeacher?: Staff; classTeacherId?: string; }
 export interface Subject { id: string; name: string; code?: string; }
 export interface AcademicYear { id: string; name: string; startDate: string; endDate: string; isCurrent: boolean; }
@@ -495,14 +503,14 @@ export interface CalendarEvent { id: string; title: string; description?: string
 export interface Homework { id: string; title: string; description?: string; schoolClass?: SchoolClass; classId?: string; subject?: Subject; subjectId?: string; dueDate?: string; attachmentUrl?: string; }
 export interface Admission { id: string; applicationNo?: string; fullName: string; gender?: string; dob?: string; status: string; parentName?: string; parentPhone?: string; parentEmail?: string; previousSchool?: string; targetClassId?: string; targetClass?: SchoolClass; notes?: string; interviewDate?: string; regFeePaid?: boolean; }
 export interface Guardian { id: string; fullName: string; relationship?: string; phone?: string; email?: string; address?: string; occupation?: string; nationalId?: string; userId?: string; temporaryPassword?: string; }
-export interface ParentTeacher { id: string; staffNo: string; fullName: string; email?: string; phone?: string; }
+export interface ParentTeacher { id: string; staffNo: string; fullName: string; email?: string; phone?: string; signatureUrl?: string; }
 export interface ParentClassInfo { id: string; name: string; stream?: string; levelOrder: number; classTeacher?: ParentTeacher; }
 export interface AttendanceSummary { from: string; to: string; total: number; present: number; absent: number; late: number; sick: number; excused: number; percentage: number; }
 export interface PerformanceSummary { examId: string; examName: string; termName?: string; academicYearName?: string; averagePercentage: number; grade: string; }
 export interface ParentChildSummary { id: string; admissionNo: string; fullName: string; gender?: string; dateOfBirth?: string; status: string; schoolClass?: ParentClassInfo; attendance: AttendanceSummary; latestPerformance?: PerformanceSummary; reportCardCount: number; }
 export interface ParentDashboard { guardian: Guardian; children: ParentChildSummary[]; }
 export interface ParentSubjectResult { subjectId: string; subjectName: string; score: number; outOf: number; percentage: number; grade: string; comment?: string; }
-export interface ParentReportCard { pupilId: string; pupilName: string; admissionNo: string; examId: string; examName: string; assessmentType?: string; examDate?: string; termId?: string; termName?: string; academicYearId?: string; academicYearName?: string; schoolClass?: ParentClassInfo; subjects: ParentSubjectResult[]; totalScore: number; totalOutOf: number; averagePercentage: number; overallGrade: string; attendance: AttendanceSummary; }
+export interface ParentReportCard { pupilId: string; pupilName: string; admissionNo: string; examId: string; examName: string; assessmentType?: string; examDate?: string; termId?: string; termName?: string; academicYearId?: string; academicYearName?: string; schoolClass?: ParentClassInfo; subjects: ParentSubjectResult[]; totalScore: number; totalOutOf: number; averagePercentage: number; overallGrade: string; attendance: AttendanceSummary; classTeacherRemark?: string; headTeacherRemark?: string; }
 export interface PromotionRequest { pupilIds: string[]; targetClassId: string; academicYearId?: string; promotedOn?: string; notes?: string; }
 export interface PromotionRecord { id: string; pupilId: string; pupilName: string; fromClassId: string; fromClassName: string; toClassId: string; toClassName: string; academicYearId?: string; academicYearName?: string; promotedOn: string; notes?: string; }
 export interface PromotionResult { promotedCount: number; promotions: PromotionRecord[]; }
@@ -527,7 +535,8 @@ export interface PurchaseOrder { id: string; poNo?: string; supplier?: Supplier;
 export interface Expense { id: string; category: string; amount: number; payee?: string; description?: string; paymentMethod?: string; refNo?: string; spentOn: string; }
 export interface Message { id: string; body: string; subject?: string; channel: string; audience?: string; sentAt: string; recipientCount?: number; }
 export interface TimetableSlot { id: string; schoolClass: SchoolClass; classId?: string; subject?: Subject; subjectId?: string; teacher?: Staff; teacherId?: string; dayOfWeek: number; startTime: string; endTime: string; room?: string; }
-export interface SchoolSettings { id: number; name: string; motto?: string; address?: string; phone?: string; email?: string; website?: string; currency: string; logoUrl?: string; city?: string; province?: string; country?: string; postalCode?: string; poBox?: string; district?: string; plotNumber?: string; latitude?: number; longitude?: number; mapUrl?: string; establishedYear?: number; registrationNo?: string; tpin?: string; headTeacher?: string; deputyHead?: string; }
+export interface SchoolSettings { id: number; name: string; motto?: string; address?: string; phone?: string; email?: string; website?: string; currency: string; logoUrl?: string; city?: string; province?: string; country?: string; postalCode?: string; poBox?: string; district?: string; plotNumber?: string; latitude?: number; longitude?: number; mapUrl?: string; establishedYear?: number; registrationNo?: string; tpin?: string; headTeacher?: string; headTeacherSignatureUrl?: string; deputyHead?: string; }
+export interface ReportCardRemark { id: string; pupil: Pupil; exam: Exam; classTeacherRemark?: string; headTeacherRemark?: string; }
 export interface AppUser { id: string; email: string; fullName?: string; roles: string[]; createdAt: string; mustChangePassword?: boolean; }
 export interface SchoolDocument { id: string; title: string; category?: string; description?: string; url: string; createdAt: string; }
 export interface ReportData { totalPupils: number; totalStaff: number; totalClasses: number; feesCollected: number; feesBilled: number; totalExpenses: number; libraryBooks: number; activeLoans: number; attendancePresent: number; totalAdmissions: number; totalVehicles: number; clinicVisits: number; }

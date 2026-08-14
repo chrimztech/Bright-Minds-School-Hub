@@ -11,7 +11,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { money } from "@/lib/format";
 import { ArrowLeft, Users, Wallet } from "lucide-react";
 
-export const Route = createFileRoute("/_authenticated/guardians/$guardianId")({
+export const Route = createFileRoute("/_authenticated/guardians_/$guardianId")({
   head: () => ({ meta: [{ title: "Parent profile" }] }),
   component: GuardianDetail,
 });

@@ -29,7 +29,7 @@ function Settings() {
       longitude: f.longitude === "" ? undefined : Number(f.longitude) || undefined,
       mapUrl: f.mapUrl, establishedYear: f.establishedYear ? Number(f.establishedYear) : undefined,
       registrationNo: f.registrationNo, tpin: f.tpin,
-      headTeacher: f.headTeacher, deputyHead: f.deputyHead,
+      headTeacher: f.headTeacher, headTeacherSignatureUrl: f.headTeacherSignatureUrl, deputyHead: f.deputyHead,
     }),
     onSuccess: () => { toast.success("Saved"); qc.invalidateQueries({ queryKey: ["school"] }); },
     onError: (e: any) => toast.error(e.message),
@@ -50,6 +50,11 @@ function Settings() {
             <div><Label>Head teacher</Label><Input value={f.headTeacher ?? ""} onChange={(e) => setF({ ...f, headTeacher: e.target.value })} /></div>
             <div><Label>Deputy head</Label><Input value={f.deputyHead ?? ""} onChange={(e) => setF({ ...f, deputyHead: e.target.value })} /></div>
             <div><Label>Established</Label><Input type="number" value={f.establishedYear ?? ""} onChange={(e) => setF({ ...f, establishedYear: e.target.value })} /></div>
+          </div>
+          <div>
+            <Label>Head teacher signature URL</Label>
+            <Input value={f.headTeacherSignatureUrl ?? ""} onChange={(e) => setF({ ...f, headTeacherSignatureUrl: e.target.value })} placeholder="https://… (image of their signature)" />
+            <p className="text-xs text-muted-foreground mt-1">Stamped on report cards alongside the class teacher's signature.</p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div><Label>Registration No.</Label><Input value={f.registrationNo ?? ""} onChange={(e) => setF({ ...f, registrationNo: e.target.value })} /></div>

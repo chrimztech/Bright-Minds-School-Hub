@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth, hasAny, ADMIN_ROLES } from "@/lib/auth";
 
 const AUDIENCES = [
   { value: "all", label: "Everyone" },
@@ -29,6 +30,8 @@ export const Route = createFileRoute("/_authenticated/announcements")({
 });
 
 function Announcements() {
+  const { roles } = useAuth();
+  const canManage = hasAny(roles, ADMIN_ROLES);
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ title: "", body: "", audience: "all" });
@@ -45,24 +48,26 @@ function Announcements() {
   });
   return (
     <>
-      <PageHeader title="Announcements" actions={
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> New</Button></DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>New announcement</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <div><Label>Title</Label><Input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} /></div>
-              <div><Label>Message</Label><Textarea rows={5} value={f.body} onChange={(e) => setF({ ...f, body: e.target.value })} /></div>
-              <div><Label>Audience</Label>
-                <Select value={f.audience} onValueChange={(v) => setF({ ...f, audience: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{AUDIENCES.map((a) => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}</SelectContent>
-                </Select>
+      <PageHeader title="Announcements" description={!canManage ? "You'll see announcements addressed to you here." : undefined} actions={
+        canManage ? (
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> New</Button></DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>New announcement</DialogTitle></DialogHeader>
+              <div className="space-y-3">
+                <div><Label>Title</Label><Input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} /></div>
+                <div><Label>Message</Label><Textarea rows={5} value={f.body} onChange={(e) => setF({ ...f, body: e.target.value })} /></div>
+                <div><Label>Audience</Label>
+                  <Select value={f.audience} onValueChange={(v) => setF({ ...f, audience: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{AUDIENCES.map((a) => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
               </div>
-            </div>
-            <DialogFooter><Button onClick={() => create.mutate()} disabled={!f.title || !f.body}>Post</Button></DialogFooter>
-          </DialogContent>
-        </Dialog>
+              <DialogFooter><Button onClick={() => create.mutate()} disabled={!f.title || !f.body}>Post</Button></DialogFooter>
+            </DialogContent>
+          </Dialog>
+        ) : undefined
       } />
       <div className="p-6 space-y-3 max-w-3xl">
         {data.length === 0 ? <p className="text-muted-foreground">No announcements yet.</p>
@@ -72,7 +77,9 @@ function Announcements() {
                 <span>{a.title}</span>
                 <span className="flex items-center gap-2">
                   <span className="text-xs font-normal text-muted-foreground">{new Date(a.createdAt).toLocaleString()}</span>
-                  <Button variant="ghost" size="icon" onClick={() => { if (confirm("Delete this announcement?")) remove.mutate(a.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  {canManage && (
+                    <Button variant="ghost" size="icon" onClick={() => { if (confirm("Delete this announcement?")) remove.mutate(a.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  )}
                 </span>
               </CardTitle></CardHeader>
               <CardContent><p className="whitespace-pre-wrap text-sm">{a.body}</p><Badge variant="outline" className="mt-2">{audienceLabel(a.audience)}</Badge></CardContent>
