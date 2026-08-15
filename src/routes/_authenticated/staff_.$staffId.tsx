@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
+import { ProfileHeader, Section, Field } from "@/components/ProfileHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/EmptyState";
 import { money } from "@/lib/format";
-import { ArrowLeft, School, Wallet, FileSignature } from "lucide-react";
+import { ArrowLeft, School, Wallet, FileSignature, Hash, Mail, Phone, BriefcaseBusiness, CalendarClock } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/staff_/$staffId")({
   head: () => ({ meta: [{ title: "Staff profile" }] }),
@@ -29,30 +30,31 @@ function StaffDetail() {
   if (!staff) return <div className="p-6"><EmptyState message="Staff member not found." /></div>;
 
   const assignedClasses = classes.filter((c) => c.classTeacher?.id === staff.id);
-  const initials = staff.fullName.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase();
+  const roleLabel = staff.roleCategory ?? (staff.isTeacher ? "Teacher" : "Staff");
 
   return (
     <>
       <PageHeader
-        title={staff.fullName}
-        description={`Staff #${staff.staffNo} · ${staff.roleCategory ?? (staff.isTeacher ? "Teacher" : "Staff")}`}
+        title="Staff profile"
         actions={<Button variant="outline" onClick={() => navigate({ to: "/staff" })}><ArrowLeft className="h-4 w-4 mr-1" /> Back to staff</Button>}
       />
       <div className="p-6 space-y-6">
-        <div className="flex flex-wrap items-center gap-4">
-          {staff.photoUrl ? (
-            <img src={staff.photoUrl} alt={staff.fullName} className="h-16 w-16 rounded-full object-cover border" />
-          ) : (
-            <div className="h-16 w-16 rounded-full flex items-center justify-center text-xl font-bold text-white shrink-0 bg-primary">
-              {initials}
-            </div>
-          )}
-          <div className="flex flex-wrap gap-2">
-            <Badge variant={staff.status === "ACTIVE" ? "default" : "secondary"}>{staff.status}</Badge>
+        <ProfileHeader
+          photoUrl={staff.photoUrl}
+          name={staff.fullName}
+          subtitle={roleLabel}
+          badges={<>
+            <Badge variant={staff.status === "ACTIVE" ? "success" : "secondary"}>{staff.status}</Badge>
             {staff.isTeacher && <Badge variant="outline">Teacher</Badge>}
-            <Badge variant={staff.userId ? "default" : "secondary"}>{staff.userId ? "Login active" : "No login"}</Badge>
-          </div>
-        </div>
+            <Badge variant={staff.userId ? "success" : "secondary"}>{staff.userId ? "Login active" : "No login"}</Badge>
+          </>}
+          meta={[
+            { icon: Hash, label: "Staff no.", value: staff.staffNo },
+            { icon: BriefcaseBusiness, label: "Role / position", value: roleLabel },
+            { icon: Mail, label: "Email", value: staff.email ?? "—" },
+            { icon: Phone, label: "Phone", value: staff.phone ?? "—" },
+          ]}
+        />
 
         <div className="grid gap-4 sm:grid-cols-3">
           <StatCard icon={School} label="Assigned classes" value={assignedClasses.length} />
@@ -69,13 +71,17 @@ function StaffDetail() {
           </TabsList>
 
           <TabsContent value="overview">
-            <Card className="mt-3"><CardContent className="pt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 text-sm">
-              <Field label="Email" value={staff.email ?? "—"} />
-              <Field label="Phone" value={staff.phone ?? "—"} />
-              <Field label="Gender" value={staff.gender ?? "—"} />
-              <Field label="Employment type" value={staff.employmentType ?? "—"} />
-              <Field label="Contract end" value={staff.contractEndDate ? new Date(staff.contractEndDate).toLocaleDateString() : "—"} />
-              <Field label="Role / position" value={staff.roleCategory ?? "—"} />
+            <Card className="mt-3"><CardContent className="pt-5 space-y-6 text-sm">
+              <Section title="Contact">
+                <Field icon={Mail} label="Email" value={staff.email ?? "—"} />
+                <Field icon={Phone} label="Phone" value={staff.phone ?? "—"} />
+                <Field label="Gender" value={staff.gender ?? "—"} />
+              </Section>
+              <Section title="Employment">
+                <Field icon={BriefcaseBusiness} label="Employment type" value={staff.employmentType ?? "—"} />
+                <Field icon={CalendarClock} label="Contract end" value={staff.contractEndDate ? new Date(staff.contractEndDate).toLocaleDateString() : "—"} />
+                <Field label="Role / position" value={roleLabel} />
+              </Section>
             </CardContent></Card>
           </TabsContent>
 
@@ -135,15 +141,6 @@ function StaffDetail() {
         </Tabs>
       </div>
     </>
-  );
-}
-
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="font-medium">{value}</p>
-    </div>
   );
 }
 

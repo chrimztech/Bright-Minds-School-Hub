@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
+import { ProfileHeader, Section, Field } from "@/components/ProfileHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/EmptyState";
 import { money } from "@/lib/format";
-import { ArrowLeft, Users, Wallet } from "lucide-react";
+import { ArrowLeft, Users, Wallet, Mail, Phone, MapPin, Briefcase, IdCard } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/guardians_/$guardianId")({
   head: () => ({ meta: [{ title: "Parent profile" }] }),
@@ -27,7 +28,7 @@ function GuardianDetail() {
     queryKey: ["guardian-invoices", guardianId, pupils.map((p) => p.id)],
     enabled: pupils.length > 0,
     queryFn: async () => {
-      const lists = await Promise.all(pupils.map((p) => api.fees.invoices.list(p.id)));
+      const lists = await Promise.all(pupils.map((p) => api.fees.invoices.list({ pupilId: p.id })));
       return lists.flat();
     },
   });
@@ -37,25 +38,28 @@ function GuardianDetail() {
   if (!guardian) return <div className="p-6"><EmptyState message="Parent not found." /></div>;
 
   const balance = invoices.reduce((s, i) => s + (Number(i.total) - Number(i.paid)), 0);
-  const initials = guardian.fullName.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase();
 
   return (
     <>
       <PageHeader
-        title={guardian.fullName}
-        description={guardian.relationship ?? "Parent / guardian"}
+        title="Parent profile"
         actions={<Button variant="outline" onClick={() => navigate({ to: "/guardians" })}><ArrowLeft className="h-4 w-4 mr-1" /> Back to parents</Button>}
       />
       <div className="p-6 space-y-6">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="h-16 w-16 rounded-full flex items-center justify-center text-xl font-bold text-white shrink-0 bg-primary">
-            {initials}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Badge variant={guardian.userId ? "default" : "secondary"}>{guardian.userId ? "Login active" : "No login"}</Badge>
+        <ProfileHeader
+          name={guardian.fullName}
+          subtitle={guardian.relationship ?? "Parent / guardian"}
+          badges={<>
+            <Badge variant={guardian.userId ? "success" : "secondary"}>{guardian.userId ? "Login active" : "No login"}</Badge>
             {guardian.relationship && <Badge variant="outline">{guardian.relationship}</Badge>}
-          </div>
-        </div>
+          </>}
+          meta={[
+            { icon: Phone, label: "Phone", value: guardian.phone ?? "—" },
+            { icon: Mail, label: "Email", value: guardian.email ?? "—" },
+            { icon: Users, label: "Linked pupils", value: pupils.length },
+            { icon: Wallet, label: "Outstanding fees", value: money(balance) },
+          ]}
+        />
 
         <div className="grid gap-4 sm:grid-cols-2">
           <StatCard icon={Users} label="Linked pupils" value={pupils.length} />
@@ -70,12 +74,16 @@ function GuardianDetail() {
           </TabsList>
 
           <TabsContent value="overview">
-            <Card className="mt-3"><CardContent className="pt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 text-sm">
-              <Field label="Phone" value={guardian.phone ?? "—"} />
-              <Field label="Email" value={guardian.email ?? "—"} />
-              <Field label="Address" value={guardian.address ?? "—"} />
-              <Field label="Occupation" value={guardian.occupation ?? "—"} />
-              <Field label="National ID" value={guardian.nationalId ?? "—"} />
+            <Card className="mt-3"><CardContent className="pt-5 space-y-6 text-sm">
+              <Section title="Contact">
+                <Field icon={Phone} label="Phone" value={guardian.phone ?? "—"} />
+                <Field icon={Mail} label="Email" value={guardian.email ?? "—"} />
+                <Field icon={MapPin} label="Address" value={guardian.address ?? "—"} />
+              </Section>
+              <Section title="Other details">
+                <Field icon={Briefcase} label="Occupation" value={guardian.occupation ?? "—"} />
+                <Field icon={IdCard} label="National ID" value={guardian.nationalId ?? "—"} />
+              </Section>
             </CardContent></Card>
           </TabsContent>
 
@@ -118,15 +126,6 @@ function GuardianDetail() {
         </Tabs>
       </div>
     </>
-  );
-}
-
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="font-medium">{value}</p>
-    </div>
   );
 }
 

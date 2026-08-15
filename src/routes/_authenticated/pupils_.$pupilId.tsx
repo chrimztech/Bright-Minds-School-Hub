@@ -2,14 +2,15 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
+import { ProfileHeader, Section, Field } from "@/components/ProfileHeader";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/EmptyState";
 import { money } from "@/lib/format";
-import { ArrowLeft, Users, Wallet, ClipboardCheck, HeartPulse, Shield } from "lucide-react";
+import { ArrowLeft, Users, Wallet, ClipboardCheck, Shield, Hash, School, Cake, MapPin, Stethoscope, AlertTriangle } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/pupils_/$pupilId")({
   head: () => ({ meta: [{ title: "Pupil profile" }] }),
@@ -22,7 +23,7 @@ function PupilDetail() {
 
   const { data: pupil, isLoading } = useQuery({ queryKey: ["pupil", pupilId], queryFn: () => api.pupils.get(pupilId) });
   const { data: guardians = [] } = useQuery({ queryKey: ["pupil-guardians", pupilId], queryFn: () => api.guardians.byPupil(pupilId) });
-  const { data: invoices = [] } = useQuery({ queryKey: ["pupil-invoices", pupilId], queryFn: () => api.fees.invoices.list(pupilId) });
+  const { data: invoices = [] } = useQuery({ queryKey: ["pupil-invoices", pupilId], queryFn: () => api.fees.invoices.list({ pupilId }) });
   const to = new Date().toISOString().slice(0, 10);
   const from = new Date(Date.now() - 90 * 864e5).toISOString().slice(0, 10);
   const { data: attendance = [] } = useQuery({ queryKey: ["pupil-attendance", pupilId], queryFn: () => api.attendance.byPupil(pupilId, from, to) });
@@ -35,32 +36,31 @@ function PupilDetail() {
   const balance = invoices.reduce((s, i) => s + (Number(i.total) - Number(i.paid)), 0);
   const presentDays = attendance.filter((a) => a.status === "PRESENT").length;
   const attendancePct = attendance.length ? Math.round((presentDays / attendance.length) * 100) : null;
-  const initials = pupil.fullName.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase();
   const classLabel = pupil.schoolClass ? `${pupil.schoolClass.name}${pupil.schoolClass.stream ? " " + pupil.schoolClass.stream : ""}` : "Unassigned";
 
   return (
     <>
       <PageHeader
-        title={pupil.fullName}
-        description={`Adm ${pupil.admissionNo} · ${classLabel}`}
+        title="Pupil profile"
         actions={<Button variant="outline" onClick={() => navigate({ to: "/pupils" })}><ArrowLeft className="h-4 w-4 mr-1" /> Back to pupils</Button>}
       />
       <div className="p-6 space-y-6">
-        <div className="flex flex-wrap items-center gap-4">
-          {pupil.photoUrl ? (
-            <img src={pupil.photoUrl} alt={pupil.fullName} className="h-16 w-16 rounded-full object-cover border" />
-          ) : (
-            <div className="h-16 w-16 rounded-full flex items-center justify-center text-xl font-bold text-white shrink-0"
-              style={{ background: `oklch(0.62 0.14 ${(pupil.fullName.charCodeAt(0) * 37) % 360}deg)` }}>
-              {initials}
-            </div>
-          )}
-          <div className="flex flex-wrap gap-2">
-            <Badge variant={pupil.status === "ACTIVE" ? "success" as any : "secondary"}>{pupil.status}</Badge>
+        <ProfileHeader
+          photoUrl={pupil.photoUrl}
+          name={pupil.fullName}
+          subtitle={classLabel}
+          badges={<>
+            <Badge variant={pupil.status === "ACTIVE" ? "success" : "secondary"}>{pupil.status}</Badge>
             {pupil.gender && <Badge variant="outline">{pupil.gender}</Badge>}
             {pupil.bloodGroup && <Badge variant="outline">Blood {pupil.bloodGroup}</Badge>}
-          </div>
-        </div>
+          </>}
+          meta={[
+            { icon: Hash, label: "Admission no.", value: pupil.admissionNo },
+            { icon: School, label: "Class", value: classLabel },
+            { icon: Cake, label: "Date of birth", value: pupil.dob ? new Date(pupil.dob).toLocaleDateString() : "—" },
+            { icon: Users, label: "Guardians", value: guardians.length },
+          ]}
+        />
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard icon={Users} label="Guardians" value={guardians.length} />
@@ -80,13 +80,16 @@ function PupilDetail() {
           </TabsList>
 
           <TabsContent value="overview">
-            <Card className="mt-3"><CardContent className="pt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 text-sm">
-              <Field label="Date of birth" value={pupil.dob ? new Date(pupil.dob).toLocaleDateString() : "—"} />
-              <Field label="Address" value={pupil.address ?? "—"} />
-              <Field label="Allergies" value={pupil.allergies ?? "—"} />
-              <Field label="Medical info" value={pupil.medicalInfo ?? "—"} />
-              <Field label="Class" value={classLabel} />
-              <Field label="Status" value={pupil.status} />
+            <Card className="mt-3"><CardContent className="pt-5 space-y-6 text-sm">
+              <Section title="Personal details">
+                <Field icon={Cake} label="Date of birth" value={pupil.dob ? new Date(pupil.dob).toLocaleDateString() : "—"} />
+                <Field icon={School} label="Class" value={classLabel} />
+                <Field icon={MapPin} label="Address" value={pupil.address ?? "—"} />
+              </Section>
+              <Section title="Health">
+                <Field icon={AlertTriangle} label="Allergies" value={pupil.allergies ?? "—"} />
+                <Field icon={Stethoscope} label="Medical info" value={pupil.medicalInfo ?? "—"} />
+              </Section>
             </CardContent></Card>
           </TabsContent>
 
@@ -183,15 +186,6 @@ function PupilDetail() {
         </Tabs>
       </div>
     </>
-  );
-}
-
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="font-medium">{value}</p>
-    </div>
   );
 }
 

@@ -51,10 +51,21 @@ function InvoicesTab() {
   const [open, setOpen] = useState(false);
   const [printId, setPrintId] = useState<string | null>(null);
   const [termFilter, setTermFilter] = useState("");
+  const [gradeFilter, setGradeFilter] = useState("");
+  const [classFilter, setClassFilter] = useState("");
+  const [pupilFilter, setPupilFilter] = useState("");
   const { data: terms = [] } = useQuery({ queryKey: ["terms-all"], queryFn: () => api.academicYears.terms.all() });
+  const { data: classes = [] } = useQuery({ queryKey: ["classes-fee-filter"], queryFn: () => api.classes.list() });
+  const grades = Array.from(new Map(classes.map((c) => [c.name, c])).values());
+  const classesInGrade = gradeFilter ? classes.filter((c) => c.name === gradeFilter) : classes;
   const { data = [] } = useQuery({
-    queryKey: ["invoices", termFilter],
-    queryFn: () => api.fees.invoices.list(undefined, termFilter || undefined),
+    queryKey: ["invoices", termFilter, gradeFilter, classFilter, pupilFilter],
+    queryFn: () => api.fees.invoices.list({
+      termId: termFilter || undefined,
+      grade: gradeFilter || undefined,
+      classId: classFilter || undefined,
+      pupilId: pupilFilter || undefined,
+    }),
   });
   const { data: pupils = [] } = useQuery({ queryKey: ["pupils-pick2"], queryFn: () => api.pupils.all() });
   const create = useMutation({
@@ -65,21 +76,55 @@ function InvoicesTab() {
   const [f, setF] = useState({ pupilId: "", description: "", total: 0, dueDate: "" });
   return (
     <div className="space-y-3 pt-4">
-      {/* Term filter */}
-      <div className="flex items-center gap-3">
-        <Label className="shrink-0 text-sm">Filter by term:</Label>
-        <Select value={termFilter} onValueChange={setTermFilter}>
-          <SelectTrigger className="w-64"><SelectValue placeholder="All terms" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">All terms</SelectItem>
-            {terms.map((t) => (
-              <SelectItem key={t.id} value={t.id}>
-                {t.name}{t.academicYear ? ` — ${t.academicYear.name}` : ""}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {termFilter && <Button variant="ghost" size="sm" onClick={() => setTermFilter("")}>Clear</Button>}
+      {/* Filters */}
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <Label className="text-sm">Term</Label>
+          <Select value={termFilter} onValueChange={setTermFilter}>
+            <SelectTrigger className="w-48"><SelectValue placeholder="All terms" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">All terms</SelectItem>
+              {terms.map((t) => (
+                <SelectItem key={t.id} value={t.id}>
+                  {t.name}{t.academicYear ? ` — ${t.academicYear.name}` : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-sm">Grade</Label>
+          <Select value={gradeFilter} onValueChange={(v) => { setGradeFilter(v); setClassFilter(""); }}>
+            <SelectTrigger className="w-40"><SelectValue placeholder="All grades" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">All grades</SelectItem>
+              {grades.map((c) => <SelectItem key={c.name} value={c.name}>{c.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-sm">Class</Label>
+          <Select value={classFilter} onValueChange={setClassFilter}>
+            <SelectTrigger className="w-48"><SelectValue placeholder="All classes" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">All classes</SelectItem>
+              {classesInGrade.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}{c.stream ? " " + c.stream : ""}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-sm">Pupil</Label>
+          <Select value={pupilFilter} onValueChange={setPupilFilter}>
+            <SelectTrigger className="w-56"><SelectValue placeholder="All pupils" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">All pupils</SelectItem>
+              {pupils.map((p) => <SelectItem key={p.id} value={p.id}>{p.fullName} ({p.admissionNo})</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        {(termFilter || gradeFilter || classFilter || pupilFilter) && (
+          <Button variant="ghost" size="sm" onClick={() => { setTermFilter(""); setGradeFilter(""); setClassFilter(""); setPupilFilter(""); }}>Clear filters</Button>
+        )}
         <span className="ml-auto text-sm text-muted-foreground">{data.length} invoice{data.length !== 1 ? "s" : ""}</span>
       </div>
       <div className="flex justify-end">
@@ -132,7 +177,7 @@ function InvoicesTab() {
 function InvoicePrint({ id, onClose }: { id: string; onClose: () => void }) {
   const { data: school } = useSchool();
   const { data: inv } = useQuery({ queryKey: ["invoice-print", id], queryFn: () => api.fees.invoices.get(id) });
-  const { data: payments = [] } = useQuery({ queryKey: ["invoice-pays", id], queryFn: () => api.fees.payments.list(undefined, id) });
+  const { data: payments = [] } = useQuery({ queryKey: ["invoice-pays", id], queryFn: () => api.fees.payments.list({ invoiceId: id }) });
   if (!inv) return null;
   const balance = Number(inv.total) - Number(inv.paid);
   return (
@@ -204,10 +249,19 @@ function PaymentsTab() {
   const [open, setOpen] = useState(false);
   const [receiptFor, setReceiptFor] = useState<Payment | null>(null);
   const [pupilFilter, setPupilFilter] = useState("");
+  const [gradeFilter, setGradeFilter] = useState("");
+  const [classFilter, setClassFilter] = useState("");
   const { data: allPupils = [] } = useQuery({ queryKey: ["pupils-pay-filter"], queryFn: () => api.pupils.all() });
+  const { data: classes = [] } = useQuery({ queryKey: ["classes-fee-filter"], queryFn: () => api.classes.list() });
+  const grades = Array.from(new Map(classes.map((c) => [c.name, c])).values());
+  const classesInGrade = gradeFilter ? classes.filter((c) => c.name === gradeFilter) : classes;
   const { data = [] } = useQuery({
-    queryKey: ["payments", pupilFilter],
-    queryFn: () => api.fees.payments.list(pupilFilter || undefined),
+    queryKey: ["payments", pupilFilter, gradeFilter, classFilter],
+    queryFn: () => api.fees.payments.list({
+      pupilId: pupilFilter || undefined,
+      grade: gradeFilter || undefined,
+      classId: classFilter || undefined,
+    }),
   });
   const { data: invoices = [] } = useQuery({ queryKey: ["invoices-open"], queryFn: () => api.fees.invoices.list() });
   const openInvoices = invoices.filter((i) => i.status !== "PAID" && i.status !== "CANCELLED");
@@ -219,19 +273,43 @@ function PaymentsTab() {
   const [f, setF] = useState({ invoiceId: "", amount: 0, method: "CASH", reference: "" });
   return (
     <div className="space-y-3 pt-4">
-      {/* Pupil filter */}
-      <div className="flex items-center gap-3">
-        <Label className="shrink-0 text-sm">Filter by pupil:</Label>
-        <Select value={pupilFilter} onValueChange={setPupilFilter}>
-          <SelectTrigger className="w-64"><SelectValue placeholder="All pupils" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">All pupils</SelectItem>
-            {allPupils.map((p) => (
-              <SelectItem key={p.id} value={p.id}>{p.fullName} ({p.admissionNo})</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {pupilFilter && <Button variant="ghost" size="sm" onClick={() => setPupilFilter("")}>Clear</Button>}
+      {/* Filters */}
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <Label className="text-sm">Grade</Label>
+          <Select value={gradeFilter} onValueChange={(v) => { setGradeFilter(v); setClassFilter(""); }}>
+            <SelectTrigger className="w-40"><SelectValue placeholder="All grades" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">All grades</SelectItem>
+              {grades.map((c) => <SelectItem key={c.name} value={c.name}>{c.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-sm">Class</Label>
+          <Select value={classFilter} onValueChange={setClassFilter}>
+            <SelectTrigger className="w-48"><SelectValue placeholder="All classes" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">All classes</SelectItem>
+              {classesInGrade.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}{c.stream ? " " + c.stream : ""}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-sm">Pupil</Label>
+          <Select value={pupilFilter} onValueChange={setPupilFilter}>
+            <SelectTrigger className="w-64"><SelectValue placeholder="All pupils" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">All pupils</SelectItem>
+              {allPupils.map((p) => (
+                <SelectItem key={p.id} value={p.id}>{p.fullName} ({p.admissionNo})</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {(pupilFilter || gradeFilter || classFilter) && (
+          <Button variant="ghost" size="sm" onClick={() => { setPupilFilter(""); setGradeFilter(""); setClassFilter(""); }}>Clear filters</Button>
+        )}
         <span className="ml-auto text-sm text-muted-foreground">{data.length} payment{data.length !== 1 ? "s" : ""}</span>
       </div>
       <div className="flex justify-end">

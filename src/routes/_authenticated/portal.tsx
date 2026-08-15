@@ -259,20 +259,23 @@ function ParentPortal() {
             </Card>
 
             <Card className="mt-4">
-              <CardHeader><CardTitle className="text-base">My payment submissions</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-base">Payment history</CardTitle></CardHeader>
               <CardContent>
                 <Table>
                   <TableHeader>
-                    <TableRow><TableHead>Date</TableHead><TableHead>Invoice</TableHead><TableHead>Method</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead></TableRow>
+                    <TableRow><TableHead>Date</TableHead><TableHead>Child</TableHead><TableHead>Invoice</TableHead><TableHead>Method</TableHead><TableHead>Receipt</TableHead><TableHead>Recorded by</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead></TableRow>
                   </TableHeader>
                   <TableBody>
                     {paymentClaims.length === 0
-                      ? <TableRow><TableCell colSpan={5}><EmptyState message="You haven't submitted any payments yet." /></TableCell></TableRow>
+                      ? <TableRow><TableCell colSpan={8}><EmptyState message="No payments recorded yet." /></TableCell></TableRow>
                       : paymentClaims.map((p) => (
                         <TableRow key={p.id}>
                           <TableCell>{p.paidOn}</TableCell>
+                          <TableCell>{p.pupil?.fullName}</TableCell>
                           <TableCell className="font-mono text-xs">{p.invoice?.invoiceNo ?? "—"}</TableCell>
                           <TableCell>{p.method.replace("_", " ")}</TableCell>
+                          <TableCell className="font-mono text-xs">{p.receiptNo}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{p.submittedBy ? "You" : "School office"}</TableCell>
                           <TableCell className="text-right font-medium">{money(p.amount)}</TableCell>
                           <TableCell>
                             <Badge variant={p.status === "CONFIRMED" ? "default" : p.status === "REJECTED" ? "destructive" : "secondary"}>

@@ -165,13 +165,15 @@ export const api = {
       delete: (id: string) => del(`/fees/items/${id}`),
     },
     invoices: {
-      list: (pupilId?: string, termId?: string) => get<Invoice[]>("/fees/invoices", { pupilId, termId }),
+      list: (params?: { pupilId?: string; termId?: string; classId?: string; grade?: string }) =>
+        get<Invoice[]>("/fees/invoices", params),
       get: (id: string) => get<Invoice>(`/fees/invoices/${id}`),
       create: (data: Partial<Invoice>) => post<Invoice>("/fees/invoices", data),
       bulkCreate: (data: Partial<Invoice>[]) => post<Invoice[]>("/fees/invoices/bulk", data),
     },
     payments: {
-      list: (pupilId?: string, invoiceId?: string) => get<Payment[]>("/fees/payments", { pupilId, invoiceId }),
+      list: (params?: { pupilId?: string; invoiceId?: string; classId?: string; grade?: string }) =>
+        get<Payment[]>("/fees/payments", params),
       create: (data: Partial<Payment>) => post<Payment>("/fees/payments", data),
       pending: () => get<Payment[]>("/fees/payments/pending"),
       confirm: (id: string) => patch<Payment>(`/fees/payments/${id}/confirm`),
