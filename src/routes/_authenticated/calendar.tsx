@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, MapPin, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/EmptyState";
+import { useAuth, hasAny, ADMIN_ROLES } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/calendar")({
   head: () => ({ meta: [{ title: "School calendar" }] }),
@@ -21,6 +22,8 @@ export const Route = createFileRoute("/_authenticated/calendar")({
 });
 
 function CalendarPage() {
+  const { roles } = useAuth();
+  const canManage = hasAny(roles, ADMIN_ROLES);
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const { data = [] } = useQuery({ queryKey: ["events"], queryFn: () => api.events.list() });
@@ -38,10 +41,12 @@ function CalendarPage() {
     <>
       <PageHeader title="School calendar" description="Term dates, events, meetings and activities"
         actions={
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> New event</Button></DialogTrigger>
-            <EventForm onSubmit={(f: any) => create.mutate(f)} />
-          </Dialog>
+          canManage ? (
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> New event</Button></DialogTrigger>
+              <EventForm onSubmit={(f: any) => create.mutate(f)} />
+            </Dialog>
+          ) : undefined
         } />
       <div className="p-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {data.length === 0 && <div className="col-span-full"><EmptyState message="No events scheduled yet." /></div>}
@@ -52,7 +57,9 @@ function CalendarPage() {
                 <h3 className="font-semibold">{e.title}</h3>
                 <div className="flex items-center gap-1">
                   <Badge variant="secondary">{e.audience}</Badge>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { if (confirm(`Delete ${e.title}?`)) remove.mutate(e.id); }}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+                  {canManage && (
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { if (confirm(`Delete ${e.title}?`)) remove.mutate(e.id); }}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+                  )}
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">{new Date(e.startsAt).toLocaleString()}{e.endsAt ? ` → ${new Date(e.endsAt).toLocaleString()}` : ""}</p>

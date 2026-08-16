@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Search, Upload, Download, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth, hasAny, ADMIN_ROLES } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/pupils")({
   head: () => ({ meta: [{ title: "Pupils" }] }),
@@ -21,6 +22,9 @@ export const Route = createFileRoute("/_authenticated/pupils")({
 });
 
 function Pupils() {
+  const { roles } = useAuth();
+  const isAdmin = hasAny(roles, ADMIN_ROLES);
+  const isTeacher = roles.includes("TEACHER") && !isAdmin;
   const qc = useQueryClient();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
@@ -30,11 +34,27 @@ function Pupils() {
   const { data: classes = [] } = useQuery({ queryKey: ["classes"], queryFn: () => api.classes.list() });
   const { data: guardians = [] } = useQuery({ queryKey: ["guardians-pick"], queryFn: () => api.guardians.list() });
 
-  const { data: page, isLoading } = useQuery({
+  // Teachers only see pupils in the class(es) they're the class teacher for, not the
+  // whole school — matches the same "my classes" scoping used on Attendance/Marks.
+  const { data: myClasses = [] } = useQuery({ queryKey: ["my-classes"], enabled: isTeacher, queryFn: () => api.classes.myClasses() });
+  const { data: myClassPupils = [], isLoading: myPupilsLoading } = useQuery({
+    queryKey: ["teacher-pupils", myClasses.map((c) => c.id)],
+    enabled: isTeacher && myClasses.length > 0,
+    queryFn: async () => (await Promise.all(myClasses.map((c) => api.pupils.byClass(c.id)))).flat(),
+  });
+
+  const { data: page, isLoading: pageLoading } = useQuery({
     queryKey: ["pupils", q],
+    enabled: !isTeacher,
     queryFn: () => api.pupils.list(q || undefined),
   });
-  const pupils = page?.content ?? [];
+  const isLoading = isTeacher ? (myClasses.length > 0 && myPupilsLoading) : pageLoading;
+  const pupils = isTeacher
+    ? myClassPupils.filter((p) => {
+        const s = q.toLowerCase().trim();
+        return !s || p.fullName.toLowerCase().includes(s) || p.admissionNo.toLowerCase().includes(s);
+      })
+    : page?.content ?? [];
 
   const create = useMutation({
     mutationFn: async (form: any) => {
@@ -92,15 +112,17 @@ function Pupils() {
 
   return (
     <>
-      <PageHeader title="Pupils" description="Manage enrolled pupils"
+      <PageHeader title="Pupils" description={isTeacher ? "Pupils in your class" : "Manage enrolled pupils"}
         actions={
-          <>
-            <Button variant="outline" onClick={() => setImportOpen(true)}><Upload className="h-4 w-4 mr-1" /> Bulk import</Button>
-            <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Add pupil</Button></DialogTrigger>
-              <PupilForm onSubmit={(f: any) => create.mutate(f)} classes={classes} guardians={guardians} />
-            </Dialog>
-          </>
+          isTeacher ? undefined : (
+            <>
+              <Button variant="outline" onClick={() => setImportOpen(true)}><Upload className="h-4 w-4 mr-1" /> Bulk import</Button>
+              <Dialog open={open} onOpenChange={setOpen}>
+                <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Add pupil</Button></DialogTrigger>
+                <PupilForm onSubmit={(f: any) => create.mutate(f)} classes={classes} guardians={guardians} />
+              </Dialog>
+            </>
+          )
         } />
       <BulkImport open={importOpen} onClose={() => setImportOpen(false)} classes={classes} onDone={() => qc.invalidateQueries({ queryKey: ["pupils"] })} />
       <div className="p-6 space-y-4">

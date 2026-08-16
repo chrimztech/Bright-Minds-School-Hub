@@ -170,6 +170,7 @@ export const api = {
       get: (id: string) => get<Invoice>(`/fees/invoices/${id}`),
       create: (data: Partial<Invoice>) => post<Invoice>("/fees/invoices", data),
       bulkCreate: (data: Partial<Invoice>[]) => post<Invoice[]>("/fees/invoices/bulk", data),
+      applyLateFees: () => post<Invoice[]>("/fees/invoices/apply-late-fees", {}),
     },
     payments: {
       list: (params?: { pupilId?: string; invoiceId?: string; classId?: string; grade?: string }) =>
@@ -498,7 +499,7 @@ export type AssessmentType = "MID_TERM" | "END_OF_TERM" | "MOCK" | "OPENER" | "O
 export interface Exam { id: string; name: string; termId?: string; assessmentType?: AssessmentType; examDate?: string; outOf: number; weight: number; }
 export interface Mark { id: string; pupil: Pupil; exam: Exam; subject: Subject; score: number; comment?: string; }
 export interface FeeItem { id: string; name: string; category: string; amount: number; classId?: string; termId?: string; isRecurring: boolean; schoolClass?: SchoolClass; term?: Term; }
-export interface Invoice { id: string; invoiceNo: string; pupil: Pupil; pupilId?: string; total: number; paid: number; status: string; dueDate?: string; description?: string; createdAt?: string; termId?: string; feeItem?: FeeItem; }
+export interface Invoice { id: string; invoiceNo: string; pupil: Pupil; pupilId?: string; total: number; paid: number; status: string; dueDate?: string; description?: string; createdAt?: string; termId?: string; feeItemId?: string; feeItem?: FeeItem; lateFeeApplied?: boolean; }
 export interface Payment { id: string; receiptNo: string; pupil?: Pupil; pupilId?: string; invoice?: Invoice; invoiceId?: string; amount: number; method: string; paidOn: string; reference?: string; status: "PENDING" | "CONFIRMED" | "REJECTED"; submittedBy?: Guardian; rejectionReason?: string; }
 export interface Announcement { id: string; title: string; body: string; audience: string; createdAt: string; }
 export interface CalendarEvent { id: string; title: string; description?: string; startsAt: string; endsAt?: string; location?: string; audience: string; }

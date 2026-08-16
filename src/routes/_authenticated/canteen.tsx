@@ -265,7 +265,7 @@ function Sales() {
       return api.canteen.sales.create({
         itemId: f.itemId,
         itemName: item?.name ?? "Item",
-        pupilId: f.pupilId || undefined,
+        pupilId: f.pupilId,
         quantity: f.quantity,
         unitPrice: unit,
         total: unit * Number(f.quantity || 0),
@@ -303,12 +303,15 @@ function Sales() {
               <div><Label>Quantity</Label><Input type="number" min="1" value={f.quantity} onChange={(e) => setF({ ...f, quantity: Number(e.target.value) })} /></div>
               <div><Label>Total</Label><Input disabled value={money((selected?.price ?? 0) * Number(f.quantity || 0))} /></div>
             </div>
-            <div><Label>Pupil (optional)</Label>
-              <Select value={f.pupilId} onValueChange={(v) => setF({ ...f, pupilId: v === "__none" ? "" : v })}>
-                <SelectTrigger><SelectValue placeholder="Walk-in / no pupil" /></SelectTrigger>
+            <div><Label>Pupil</Label>
+              <Select value={f.pupilId} onValueChange={(v) => setF({ ...f, pupilId: v })}>
+                <SelectTrigger><SelectValue placeholder="Select pupil" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none">— None —</SelectItem>
-                  {pupils.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.fullName}</SelectItem>)}
+                  {pupils.map((p: any) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.fullName}{p.schoolClass ? ` — ${p.schoolClass.name}${p.schoolClass.stream ? " " + p.schoolClass.stream : ""}` : ""}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -323,17 +326,18 @@ function Sales() {
             </div>
             <div><Label>Notes</Label><Textarea value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></div>
           </div>
-          <DialogFooter><Button onClick={() => create.mutate(f)} disabled={!f.itemId || !f.quantity}>Save</Button></DialogFooter>
+          <DialogFooter><Button onClick={() => create.mutate(f)} disabled={!f.itemId || !f.quantity || !f.pupilId}>Save</Button></DialogFooter>
         </DialogContent>
       </Dialog>
       <div className="rounded-lg border bg-card"><Table>
-        <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Item</TableHead><TableHead>Pupil</TableHead><TableHead>Qty</TableHead><TableHead>Method</TableHead><TableHead className="text-right">Total</TableHead><TableHead></TableHead></TableRow></TableHeader>
+        <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Item</TableHead><TableHead>Pupil</TableHead><TableHead>Class</TableHead><TableHead>Qty</TableHead><TableHead>Method</TableHead><TableHead className="text-right">Total</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
-          {data.length === 0 ? <TableRow><TableCell colSpan={7}><EmptyState /></TableCell></TableRow> : data.map((r: any) => (
+          {data.length === 0 ? <TableRow><TableCell colSpan={8}><EmptyState /></TableCell></TableRow> : data.map((r: any) => (
             <TableRow key={r.id}>
               <TableCell>{r.servedOn}</TableCell>
               <TableCell>{r.itemName}</TableCell>
               <TableCell>{r.pupil?.fullName ?? "—"}</TableCell>
+              <TableCell className="text-muted-foreground text-xs">{r.pupil?.schoolClass ? `${r.pupil.schoolClass.name}${r.pupil.schoolClass.stream ? " " + r.pupil.schoolClass.stream : ""}` : "—"}</TableCell>
               <TableCell>{r.quantity}</TableCell>
               <TableCell>{r.paymentMethod}</TableCell>
               <TableCell className="text-right text-emerald-600">{money(r.total)}</TableCell>

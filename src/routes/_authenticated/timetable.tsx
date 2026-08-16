@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth, hasAny, ADMIN_ROLES } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/timetable")({
   head: () => ({ meta: [{ title: "Timetable" }] }),
@@ -19,10 +20,16 @@ export const Route = createFileRoute("/_authenticated/timetable")({
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
 
 function Timetable() {
+  const { roles } = useAuth();
+  const isAdmin = hasAny(roles, ADMIN_ROLES);
+  const isTeacher = roles.includes("TEACHER") && !isAdmin;
   const qc = useQueryClient();
   const [classId, setClassId] = useState("");
   const [open, setOpen] = useState(false);
-  const { data: classes = [] } = useQuery({ queryKey: ["classes-tt"], queryFn: () => api.classes.list() });
+  const { data: myClasses = [] } = useQuery({ queryKey: ["my-classes"], enabled: isTeacher, queryFn: () => api.classes.myClasses() });
+  const { data: allClasses = [] } = useQuery({ queryKey: ["classes-tt"], enabled: !isTeacher, queryFn: () => api.classes.list() });
+  const classes = isTeacher ? myClasses : allClasses;
+  useEffect(() => { if (isTeacher && myClasses.length > 0 && !classId) setClassId(myClasses[0].id); }, [isTeacher, myClasses, classId]);
   const { data: subjects = [] } = useQuery({ queryKey: ["subjects-tt"], queryFn: () => api.subjects.list() });
   const { data: teachers = [] } = useQuery({ queryKey: ["teachers-tt"], queryFn: () => api.staff.teachers() });
   const { data: slots = [] } = useQuery({

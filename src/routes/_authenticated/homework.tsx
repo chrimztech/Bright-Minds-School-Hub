@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus, BookMarked, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth, hasAny, ADMIN_ROLES } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/homework")({
   head: () => ({ meta: [{ title: "Homework" }] }),
@@ -19,11 +20,19 @@ export const Route = createFileRoute("/_authenticated/homework")({
 });
 
 function Homework() {
+  const { roles } = useAuth();
+  const isAdmin = hasAny(roles, ADMIN_ROLES);
+  const isTeacher = roles.includes("TEACHER") && !isAdmin;
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ title: "", description: "", classId: "", subjectId: "", dueDate: "" });
-  const { data = [] } = useQuery({ queryKey: ["homework"], queryFn: () => api.homework.list() });
-  const { data: classes = [] } = useQuery({ queryKey: ["classes-hw"], queryFn: () => api.classes.list() });
+  const { data: allHomework = [] } = useQuery({ queryKey: ["homework"], queryFn: () => api.homework.list() });
+  const { data: myClasses = [] } = useQuery({ queryKey: ["my-classes"], enabled: isTeacher, queryFn: () => api.classes.myClasses() });
+  const { data: allClasses = [] } = useQuery({ queryKey: ["classes-hw"], enabled: !isTeacher, queryFn: () => api.classes.list() });
+  const classes = isTeacher ? myClasses : allClasses;
+  const myClassIds = new Set(myClasses.map((c) => c.id));
+  // Teachers only manage homework for the class(es) they teach, not the whole school.
+  const data = isTeacher ? allHomework.filter((h) => h.schoolClass && myClassIds.has(h.schoolClass.id)) : allHomework;
   const { data: subjects = [] } = useQuery({ queryKey: ["subjects-hw"], queryFn: () => api.subjects.list() });
   const create = useMutation({
     mutationFn: () => api.homework.create({ title: f.title, description: f.description || undefined, classId: f.classId || undefined, subjectId: f.subjectId || undefined, dueDate: f.dueDate || undefined }),

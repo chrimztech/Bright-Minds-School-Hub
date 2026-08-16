@@ -160,7 +160,11 @@ function ParentPortal() {
                             </div>
                             <div>
                               <p className="text-xs text-muted-foreground">Attendance</p>
-                              <p className="font-semibold">{details ? `${details.attendance.percentage.toFixed(1)}%` : childPct != null ? `${childPct}%` : "—"}</p>
+                              <p className="font-semibold">
+                                {details
+                                  ? `${details.attendance.present}/${details.attendance.total} (${details.attendance.percentage.toFixed(0)}%)`
+                                  : childAtt.length ? `${childPresent}/${childAtt.length} (${childPct}%)` : "—"}
+                              </p>
                             </div>
                             <div>
                               <p className="text-xs text-muted-foreground">Latest grade</p>
@@ -178,6 +182,21 @@ function ParentPortal() {
 
           {/* ── Attendance ── */}
           <TabsContent value="attendance">
+            {pupils.length > 0 && (
+              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {pupils.map((p) => {
+                  const childAtt = attendance.filter((a) => a.pupil?.id === p.id || (a as any).pupilId === p.id);
+                  const childPresent = childAtt.filter((a) => a.status === "PRESENT").length;
+                  const childPct = childAtt.length ? Math.round((childPresent / childAtt.length) * 100) : null;
+                  return (
+                    <div key={p.id} className="rounded-lg border bg-card p-3">
+                      <p className="text-xs text-muted-foreground">{p.fullName}</p>
+                      <p className="font-semibold text-lg">{childAtt.length ? `${childPresent}/${childAtt.length}` : "—"} <span className="text-sm font-normal text-muted-foreground">{childPct != null ? `days present (${childPct}%)` : "no records"}</span></p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             <Card className="mt-3">
               <CardHeader>
                 <CardTitle className="text-base">Attendance — last 90 days</CardTitle>

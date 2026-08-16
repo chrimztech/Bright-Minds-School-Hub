@@ -73,6 +73,14 @@ function InvoicesTab() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["invoices"] }); toast.success("Invoice created"); setOpen(false); },
     onError: (e: any) => toast.error(e.message),
   });
+  const applyLateFees = useMutation({
+    mutationFn: () => api.fees.invoices.applyLateFees(),
+    onSuccess: (created) => {
+      qc.invalidateQueries({ queryKey: ["invoices"] });
+      toast.success(created.length === 0 ? "No overdue invoices needed a late fee" : `Charged K35 administrative fee on ${created.length} overdue invoice${created.length !== 1 ? "s" : ""}`);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
   const [f, setF] = useState({ pupilId: "", description: "", total: 0, dueDate: "" });
   return (
     <div className="space-y-3 pt-4">
@@ -127,7 +135,10 @@ function InvoicesTab() {
         )}
         <span className="ml-auto text-sm text-muted-foreground">{data.length} invoice{data.length !== 1 ? "s" : ""}</span>
       </div>
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" onClick={() => applyLateFees.mutate()} disabled={applyLateFees.isPending} title="Charges a K35 administrative fee on invoices past their due date that haven't been fully paid">
+          {applyLateFees.isPending ? "Checking…" : "Apply late fees"}
+        </Button>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" />New invoice</Button></DialogTrigger>
           <DialogContent>
@@ -183,7 +194,7 @@ function InvoicePrint({ id, onClose }: { id: string; onClose: () => void }) {
   return (
     <PrintOverlay onClose={onClose}>
       <div className="p-10 font-sans">
-        <DocHeader school={school} title="Invoice" />
+        <DocHeader school={{ ...school, logoUrl: school?.logoUrl ?? "/logo.png" }} title="Invoice" />
         <div className="grid grid-cols-2 gap-8 text-sm mb-8">
           <div>
             <p className="uppercase text-[10px] tracking-widest text-gray-500 mb-1">Billed to</p>
@@ -428,7 +439,7 @@ function ReceiptPrint({ payment, onClose }: { payment: Payment; onClose: () => v
   return (
     <PrintOverlay onClose={onClose}>
       <div className="p-10 font-sans">
-        <DocHeader school={school} title="Receipt" />
+        <DocHeader school={{ ...school, logoUrl: school?.logoUrl ?? "/logo.png" }} title="Receipt" />
         <div className="grid grid-cols-2 gap-8 text-sm mb-8">
           <div>
             <p className="uppercase text-[10px] tracking-widest text-gray-500 mb-1">Received from</p>
@@ -586,26 +597,45 @@ function FeeItemsTab() {
 }
 
 function BillClassDialog({ onClose, feeItems, classes, terms }: any) {
+  const [mode, setMode] = useState<"class" | "pupils">("class");
   const [classId, setClassId] = useState("");
   const [termId, setTermId] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [selected, setSelected] = useState<Record<string, number>>({});
-  const { data: pupils = [] } = useQuery({
+  const [pupilSearch, setPupilSearch] = useState("");
+  const [pupilIds, setPupilIds] = useState<Set<string>>(new Set());
+
+  const { data: classPupils = [] } = useQuery({
     queryKey: ["bill-pupils", classId],
-    enabled: !!classId,
+    enabled: mode === "class" && !!classId,
     queryFn: () => api.pupils.byClass(classId),
   });
-  const eligible = feeItems.filter((i: any) => !i.classId || i.classId === classId);
+  const { data: allPupils = [] } = useQuery({ queryKey: ["pupils-pick2"], queryFn: () => api.pupils.all() });
+
+  const pupils = mode === "class" ? classPupils : allPupils.filter((p) => pupilIds.has(p.id));
+  const eligible = mode === "class" ? feeItems.filter((i: any) => !i.classId || i.classId === classId) : feeItems;
   const total = Object.values(selected).reduce((s, v) => s + Number(v || 0), 0);
+  const selectedItemIds = Object.keys(selected);
   const [busy, setBusy] = useState(false);
+
+  const filteredPupils = allPupils.filter((p) => {
+    const s = pupilSearch.toLowerCase().trim();
+    return !s || p.fullName.toLowerCase().includes(s) || p.admissionNo.toLowerCase().includes(s);
+  });
+
   async function bill() {
     if (!pupils.length || total <= 0) return;
     setBusy(true);
     try {
       const desc = eligible.filter((i: any) => selected[i.id]).map((i: any) => `${i.name}: ${money(selected[i.id])}`).join(" • ");
+      // Tag the invoice with the fee item when exactly one is selected, so it carries a
+      // clear category (Transport/Food/Uniform/…) for filtering — a combined multi-item
+      // bill has no single category and is left untagged (defaults to "School fees").
+      const feeItemId = selectedItemIds.length === 1 ? selectedItemIds[0] : undefined;
       const rows = pupils.map((p) => ({
         pupilId: p.id,
         termId: termId || undefined,
+        feeItemId,
         description: desc || "School fees",
         total,
         dueDate: dueDate || undefined,
@@ -615,18 +645,36 @@ function BillClassDialog({ onClose, feeItems, classes, terms }: any) {
       onClose();
     } catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
   }
+
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-2xl">
-        <DialogHeader><DialogTitle>Bill a class</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Bill pupils</DialogTitle></DialogHeader>
         <div className="space-y-3">
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setMode("class")}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium border transition-colors ${mode === "class" ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"}`}>
+              By class
+            </button>
+            <button type="button" onClick={() => setMode("pupils")}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium border transition-colors ${mode === "pupils" ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"}`}>
+              By individual pupil(s)
+            </button>
+          </div>
+
           <div className="grid grid-cols-3 gap-3">
-            <div><Label>Class</Label>
-              <Select value={classId} onValueChange={setClassId}>
-                <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
-                <SelectContent>{classes.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}{c.stream ? " " + c.stream : ""}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
+            {mode === "class" ? (
+              <div><Label>Class</Label>
+                <Select value={classId} onValueChange={setClassId}>
+                  <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
+                  <SelectContent>{classes.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}{c.stream ? " " + c.stream : ""}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div className="col-span-1"><Label>Pupils selected</Label>
+                <div className="h-9 flex items-center px-3 rounded-md border bg-muted text-sm font-medium">{pupilIds.size}</div>
+              </div>
+            )}
             <div><Label>Term</Label>
               <Select value={termId} onValueChange={setTermId}>
                 <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
@@ -635,7 +683,30 @@ function BillClassDialog({ onClose, feeItems, classes, terms }: any) {
             </div>
             <div><Label>Due date</Label><Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} /></div>
           </div>
-          {classId && (
+
+          {mode === "pupils" && (
+            <div>
+              <Input placeholder="Search name or admission no…" value={pupilSearch} onChange={(e) => setPupilSearch(e.target.value)} className="mb-1.5" />
+              <div className="rounded border max-h-40 overflow-auto">
+                <Table>
+                  <TableBody>
+                    {filteredPupils.slice(0, 50).map((p) => (
+                      <TableRow key={p.id} className="cursor-pointer" onClick={() => setPupilIds((s) => {
+                        const n = new Set(s); if (n.has(p.id)) n.delete(p.id); else n.add(p.id); return n;
+                      })}>
+                        <TableCell className="w-8 py-1.5"><input type="checkbox" checked={pupilIds.has(p.id)} readOnly /></TableCell>
+                        <TableCell className="py-1.5 font-medium">{p.fullName}</TableCell>
+                        <TableCell className="py-1.5 text-xs text-muted-foreground">{p.admissionNo}</TableCell>
+                        <TableCell className="py-1.5 text-xs text-muted-foreground">{p.schoolClass ? `${p.schoolClass.name}${p.schoolClass.stream ? " " + p.schoolClass.stream : ""}` : "—"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+
+          {(mode === "class" ? !!classId : pupilIds.size > 0) && (
             <div className="rounded border max-h-72 overflow-auto">
               <Table>
                 <TableHeader><TableRow><TableHead className="w-10"></TableHead><TableHead>Fee item</TableHead><TableHead className="w-40">Amount (editable)</TableHead></TableRow></TableHeader>
@@ -646,7 +717,7 @@ function BillClassDialog({ onClose, feeItems, classes, terms }: any) {
                         <TableCell><input type="checkbox" checked={i.id in selected} onChange={(e) => {
                           setSelected((s) => { const n = { ...s }; if (e.target.checked) n[i.id] = Number(i.amount); else delete n[i.id]; return n; });
                         }} /></TableCell>
-                        <TableCell>{i.name}</TableCell>
+                        <TableCell>{i.name} <span className="text-xs text-muted-foreground">({i.category})</span></TableCell>
                         <TableCell>
                           <Input type="number" disabled={!(i.id in selected)} value={selected[i.id] ?? i.amount}
                             onChange={(e) => setSelected((s) => ({ ...s, [i.id]: Number(e.target.value) }))} className="h-8" />
@@ -662,7 +733,7 @@ function BillClassDialog({ onClose, feeItems, classes, terms }: any) {
             <span className="font-semibold">Each invoice total: {money(total)}</span>
           </div>
         </div>
-        <DialogFooter><Button onClick={bill} disabled={!classId || total <= 0 || pupils.length === 0 || busy}>{busy ? "Creating…" : `Create ${pupils.length} invoices`}</Button></DialogFooter>
+        <DialogFooter><Button onClick={bill} disabled={total <= 0 || pupils.length === 0 || busy}>{busy ? "Creating…" : `Create ${pupils.length} invoices`}</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   );
