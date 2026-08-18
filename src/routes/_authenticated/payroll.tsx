@@ -145,7 +145,7 @@ function PayslipPrint({ slip, onClose }: { slip: any; onClose: () => void }) {
   return (
     <PrintOverlay onClose={onClose}>
       <div className="p-10 font-sans">
-        <DocHeader school={school} title="Payslip" />
+        <DocHeader school={{ ...school, logoUrl: school?.logoUrl ?? "/logo.png" }} title="Payslip" />
         <div className="grid grid-cols-2 gap-8 text-sm mb-8">
           <div>
             <p className="uppercase text-[10px] tracking-widest text-gray-500 mb-1">Employee</p>
