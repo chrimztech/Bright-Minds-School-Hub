@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Printer, Trash2, Receipt } from "lucide-react";
+import { Plus, Printer, Trash2, Receipt, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { money } from "@/lib/format";
 import { PrintOverlay, DocHeader, useSchool } from "@/components/PrintableDoc";
@@ -259,6 +259,7 @@ function PaymentsTab() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [receiptFor, setReceiptFor] = useState<Payment | null>(null);
+  const [editing, setEditing] = useState<Payment | null>(null);
   const [pupilFilter, setPupilFilter] = useState("");
   const [gradeFilter, setGradeFilter] = useState("");
   const [classFilter, setClassFilter] = useState("");
@@ -279,6 +280,16 @@ function PaymentsTab() {
   const create = useMutation({
     mutationFn: (f: any) => api.fees.payments.create({ invoiceId: f.invoiceId, amount: f.amount, method: f.method, reference: f.reference || undefined }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["payments"] }); qc.invalidateQueries({ queryKey: ["invoices"] }); toast.success("Payment recorded"); setOpen(false); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const update = useMutation({
+    mutationFn: ({ id, ...f }: any) => api.fees.payments.update(id, f),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["payments"] }); qc.invalidateQueries({ queryKey: ["invoices"] }); toast.success("Payment corrected — invoice balance updated"); setEditing(null); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => api.fees.payments.delete(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["payments"] }); qc.invalidateQueries({ queryKey: ["invoices"] }); toast.success("Payment removed — invoice balance updated"); },
     onError: (e: any) => toast.error(e.message),
   });
   const [f, setF] = useState({ invoiceId: "", amount: 0, method: "CASH", reference: "" });
@@ -366,13 +377,25 @@ function PaymentsTab() {
                   <TableCell>
                     <Badge variant={p.status === "CONFIRMED" ? "default" : p.status === "REJECTED" ? "destructive" : "secondary"}>{p.status}</Badge>
                   </TableCell>
-                  <TableCell><Button size="icon" variant="ghost" onClick={() => setReceiptFor(p)}><Printer className="h-4 w-4" /></Button></TableCell>
+                  <TableCell className="text-right whitespace-nowrap">
+                    <Button size="icon" variant="ghost" onClick={() => setReceiptFor(p)} title="Print receipt"><Printer className="h-4 w-4" /></Button>
+                    <Button size="icon" variant="ghost" onClick={() => setEditing(p)} title="Correct this payment"><Pencil className="h-4 w-4" /></Button>
+                    <Button size="icon" variant="ghost" onClick={() => { if (confirm(`Delete this payment of ${money(p.amount)}? The invoice balance will be updated.`)) remove.mutate(p.id); }} title="Delete"><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  </TableCell>
                 </TableRow>
               ))}
           </TableBody>
         </Table>
       </div>
       {receiptFor && <ReceiptPrint payment={receiptFor} onClose={() => setReceiptFor(null)} />}
+      {editing && (
+        <Dialog open onOpenChange={() => setEditing(null)}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Correct payment {editing.receiptNo}</DialogTitle></DialogHeader>
+            <EditPaymentForm payment={editing} onSubmit={(f: any) => update.mutate({ id: editing.id, ...f })} />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
@@ -478,6 +501,30 @@ function ReceiptPrint({ payment, onClose }: { payment: Payment; onClose: () => v
         </div>
       </div>
     </PrintOverlay>
+  );
+}
+
+function EditPaymentForm({ payment, onSubmit }: { payment: Payment; onSubmit: (f: any) => void }) {
+  const [f, setF] = useState({ amount: payment.amount, method: payment.method, reference: payment.reference ?? "" });
+  return (
+    <>
+      <div className="space-y-3">
+        <p className="text-xs text-muted-foreground rounded-md bg-muted/50 p-2.5">
+          Changing the amount will automatically adjust the linked invoice's balance to match.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <div><Label>Amount</Label><Input type="number" value={f.amount} onChange={(e) => setF({ ...f, amount: Number(e.target.value) })} /></div>
+          <div><Label>Method</Label>
+            <Select value={f.method} onValueChange={(v) => setF({ ...f, method: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>{["CASH","BANK","MOBILE_MONEY","CARD","CHEQUE","ONLINE"].map((m) => <SelectItem key={m} value={m}>{m.replace("_", " ")}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div><Label>Reference</Label><Input value={f.reference} onChange={(e) => setF({ ...f, reference: e.target.value })} /></div>
+      </div>
+      <DialogFooter><Button onClick={() => onSubmit(f)} disabled={!f.amount}>Save correction</Button></DialogFooter>
+    </>
   );
 }
 

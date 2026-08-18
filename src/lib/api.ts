@@ -67,6 +67,24 @@ const put = <T>(path: string, body?: unknown) => request<T>("PUT", path, body);
 const patch = <T>(path: string, body?: unknown) => request<T>("PATCH", path, body);
 const del = (path: string) => request<void>("DELETE", path);
 
+// Multipart upload — deliberately bypasses request()'s JSON Content-Type: the browser must
+// set its own multipart boundary, which it only does when the header is left unset.
+async function uploadFile(file: File): Promise<{ url: string }> {
+  const token = getToken();
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(new URL(BASE_URL + "/uploads", window.location.origin).toString(), {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body: form,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: res.statusText }));
+    throw new Error(err.message ?? "Upload failed");
+  }
+  return res.json();
+}
+
 // Auth
 export const api = {
   auth: {
@@ -80,6 +98,10 @@ export const api = {
 
   dashboard: {
     get: () => get<DashboardData>("/dashboard"),
+  },
+
+  uploads: {
+    upload: (file: File) => uploadFile(file),
   },
 
   pupils: {
@@ -176,6 +198,8 @@ export const api = {
       list: (params?: { pupilId?: string; invoiceId?: string; classId?: string; grade?: string }) =>
         get<Payment[]>("/fees/payments", params),
       create: (data: Partial<Payment>) => post<Payment>("/fees/payments", data),
+      update: (id: string, data: Partial<Payment>) => put<Payment>(`/fees/payments/${id}`, data),
+      delete: (id: string) => del(`/fees/payments/${id}`),
       pending: () => get<Payment[]>("/fees/payments/pending"),
       confirm: (id: string) => patch<Payment>(`/fees/payments/${id}/confirm`),
       reject: (id: string, reason?: string) => patch<Payment>(`/fees/payments/${id}/reject`, { reason }),
@@ -352,6 +376,8 @@ export const api = {
       list: (periodId?: string, staffId?: string) =>
         get<Payslip[]>("/payroll/payslips", { periodId, staffId }),
       create: (data: Partial<Payslip>) => post<Payslip>("/payroll/payslips", data),
+      update: (id: string, data: Partial<Payslip>) => put<Payslip>(`/payroll/payslips/${id}`, data),
+      delete: (id: string) => del(`/payroll/payslips/${id}`),
     },
   },
 

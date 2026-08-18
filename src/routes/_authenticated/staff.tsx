@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { ImageUploadField } from "@/components/ImageUploadField";
 import { Plus, Pencil, Trash2, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { money } from "@/lib/format";
@@ -165,6 +166,8 @@ function StaffForm({ onSubmit, initial }: any) {
     onSubmit({
       ...rest,
       roleCategory: f.roleCategory === "Other" ? roleCategoryOther : f.roleCategory || undefined,
+      dob: f.dob || undefined,
+      dateJoined: f.dateJoined || undefined,
       contractEndDate: f.contractEndDate || undefined,
       temporaryPassword: temporaryPassword || undefined,
     });
@@ -195,13 +198,14 @@ function StaffForm({ onSubmit, initial }: any) {
           </div>
           <div><Label>Email</Label><Input type="email" value={f.email} onChange={(e) => set("email", e.target.value)} /></div>
           <div><Label>Address</Label><Input value={f.address} onChange={(e) => set("address", e.target.value)} /></div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><Label>Next of kin</Label><Input placeholder="Name & phone" value={f.nextOfKin} onChange={(e) => set("nextOfKin", e.target.value)} /></div>
-            <div><Label>Photo URL</Label><Input placeholder="https://…" value={f.photoUrl} onChange={(e) => set("photoUrl", e.target.value)} /></div>
+          <div><Label>Next of kin</Label><Input placeholder="Name & phone" value={f.nextOfKin} onChange={(e) => set("nextOfKin", e.target.value)} /></div>
+          <div>
+            <Label>Photo</Label>
+            <ImageUploadField value={f.photoUrl} onChange={(url) => set("photoUrl", url)} />
           </div>
           <div>
-            <Label>Signature URL</Label>
-            <Input placeholder="https://… (image of their signature)" value={f.signatureUrl} onChange={(e) => set("signatureUrl", e.target.value)} />
+            <Label>Signature</Label>
+            <ImageUploadField value={f.signatureUrl} onChange={(url) => set("signatureUrl", url)} placeholder="https://… (image of their signature)" />
             <p className="text-xs text-muted-foreground mt-1">Used to stamp their signature on report cards when they're a class teacher.</p>
           </div>
           {!initial && (

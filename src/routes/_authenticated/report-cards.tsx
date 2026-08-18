@@ -179,6 +179,21 @@ function ReportCardTab({ isParentOnly }: { isParentOnly: boolean }) {
     [allMarks, batchClassId]);
   const batchRanked = useMemo(() => buildRanked(batchMarks, outOf), [batchMarks, outOf]);
 
+  const { data: batchAttendance = [] } = useQuery({
+    queryKey: ["att-rc-batch", batchClassId, selectedTerm?.id],
+    enabled: !!batchClassId && !!selectedTerm,
+    queryFn: () => api.attendance.range(batchClassId, selectedTerm!.startDate, selectedTerm!.endDate),
+  });
+  const batchAttendanceByPupil = useMemo(() => {
+    const m = new Map<string, typeof batchAttendance>();
+    for (const a of batchAttendance) {
+      const pid = a.pupil.id;
+      if (!m.has(pid)) m.set(pid, []);
+      m.get(pid)!.push(a);
+    }
+    return m;
+  }, [batchAttendance]);
+
   const ready = !!pupilId && !!examId && pupil && exam;
 
   return (
@@ -305,11 +320,13 @@ function ReportCardTab({ isParentOnly }: { isParentOnly: boolean }) {
             {attendance.length > 0 && (
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Attendance this term</p>
-                <div className="grid grid-cols-4 gap-3 border rounded-lg p-3 text-center text-sm">
+                <div className="grid grid-cols-5 gap-3 border rounded-lg p-3 text-center text-sm">
                   {(["PRESENT","ABSENT","LATE","EXCUSED"] as const).map(s => (
                     <div key={s}><p className="text-xs text-muted-foreground">{s.charAt(0)+s.slice(1).toLowerCase()}</p>
                       <p className="font-bold">{attendance.filter(a => a.status === s).length}</p></div>
                   ))}
+                  <div><p className="text-xs text-muted-foreground">Rate</p>
+                    <p className="font-bold">{Math.round((attendance.filter(a => a.status === "PRESENT").length / attendance.length) * 100)}%</p></div>
                 </div>
               </div>
             )}
@@ -343,7 +360,7 @@ function ReportCardTab({ isParentOnly }: { isParentOnly: boolean }) {
         <PrintOverlay onClose={() => setBatchOpen(false)}>
           {batchRanked.map(({ pupil: p, marks: pm, position, average }, i) => (
             <div key={p.id} style={{ pageBreakAfter: i < batchRanked.length - 1 ? "always" : "auto" }}>
-              <ReportCardPrint school={school} pupil={p} exam={exam} marks={pm} term={selectedTerm} attendance={[]} position={position} classSize={batchRanked.length} classTeacherRemark="" headTeacherRemark="" />
+              <ReportCardPrint school={school} pupil={p} exam={exam} marks={pm} term={selectedTerm} attendance={batchAttendanceByPupil.get(p.id) ?? []} position={position} classSize={batchRanked.length} classTeacherRemark="" headTeacherRemark="" />
             </div>
           ))}
         </PrintOverlay>
@@ -437,7 +454,7 @@ function ReportCardPrint({ school, pupil, exam, marks, term, attendance, positio
           <div><p className="text-xs text-gray-500">Present</p><p className="font-bold text-green-700">{present}</p></div>
           <div><p className="text-xs text-gray-500">Absent</p><p className="font-bold text-red-600">{absent}</p></div>
           <div><p className="text-xs text-gray-500">Late</p><p className="font-bold text-orange-500">{late}</p></div>
-          <div><p className="text-xs text-gray-500">Attendance rate</p><p className="font-bold">{attPct != null ? `${attPct}%` : "—"}</p></div>
+          <div><p className="text-xs text-gray-500">Attendance rate</p><p className="font-bold">{attPct != null ? `${present}/${attendance.length} (${attPct}%)` : "—"}</p></div>
         </div>
       )}
 

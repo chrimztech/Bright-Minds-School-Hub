@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Search, Upload, Download, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth, hasAny, ADMIN_ROLES } from "@/lib/auth";
+import { ImageUploadField } from "@/components/ImageUploadField";
 
 export const Route = createFileRoute("/_authenticated/pupils")({
   head: () => ({ meta: [{ title: "Pupils" }] }),
@@ -298,7 +299,7 @@ function PupilForm({ onSubmit, classes, guardians }: any) {
             </div>
           </div>
           <div><Label>Address</Label><Textarea rows={2} value={form.address} onChange={(e) => set("address", e.target.value)} /></div>
-          <div><Label>Photo URL</Label><Input placeholder="https://…" value={form.photoUrl} onChange={(e) => set("photoUrl", e.target.value)} /></div>
+          <div><Label>Photo</Label><ImageUploadField value={form.photoUrl} onChange={(url) => set("photoUrl", url)} /></div>
         </TabsContent>
         <TabsContent value="academic" className="space-y-3 pt-2">
           <div><Label>Class</Label>
@@ -398,7 +399,7 @@ function PupilEditForm({ pupil, classes, onSubmit }: any) {
             </div>
           </div>
           <div><Label>Address</Label><Textarea rows={2} value={form.address} onChange={(e) => set("address", e.target.value)} /></div>
-          <div><Label>Photo URL</Label><Input placeholder="https://…" value={form.photoUrl} onChange={(e) => set("photoUrl", e.target.value)} /></div>
+          <div><Label>Photo</Label><ImageUploadField value={form.photoUrl} onChange={(url) => set("photoUrl", url)} /></div>
         </TabsContent>
         <TabsContent value="academic" className="space-y-3 pt-2">
           <div><Label>Class</Label>

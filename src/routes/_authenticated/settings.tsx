@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { ImageUploadField } from "@/components/ImageUploadField";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/settings")({
@@ -42,18 +43,17 @@ function Settings() {
       <PageHeader title="School settings" />
       <div className="p-6 max-w-3xl">
         <Card><CardContent className="p-6 space-y-3">
-          {f.logoUrl && <img src={f.logoUrl} alt="School logo" className="h-16 w-16 rounded object-cover border" />}
           <div><Label>School name</Label><Input value={f.name ?? ""} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
           <div><Label>Motto</Label><Input value={f.motto ?? ""} onChange={(e) => setF({ ...f, motto: e.target.value })} /></div>
-          <div><Label>Logo URL</Label><Input value={f.logoUrl ?? ""} onChange={(e) => setF({ ...f, logoUrl: e.target.value })} placeholder="https://…/logo.png" /></div>
+          <div><Label>Logo</Label><ImageUploadField value={f.logoUrl ?? ""} onChange={(url) => setF({ ...f, logoUrl: url })} placeholder="https://…/logo.png" /></div>
           <div className="grid grid-cols-3 gap-3">
             <div><Label>Head teacher</Label><Input value={f.headTeacher ?? ""} onChange={(e) => setF({ ...f, headTeacher: e.target.value })} /></div>
             <div><Label>Deputy head</Label><Input value={f.deputyHead ?? ""} onChange={(e) => setF({ ...f, deputyHead: e.target.value })} /></div>
             <div><Label>Established</Label><Input type="number" value={f.establishedYear ?? ""} onChange={(e) => setF({ ...f, establishedYear: e.target.value })} /></div>
           </div>
           <div>
-            <Label>Head teacher signature URL</Label>
-            <Input value={f.headTeacherSignatureUrl ?? ""} onChange={(e) => setF({ ...f, headTeacherSignatureUrl: e.target.value })} placeholder="https://… (image of their signature)" />
+            <Label>Head teacher signature</Label>
+            <ImageUploadField value={f.headTeacherSignatureUrl ?? ""} onChange={(url) => setF({ ...f, headTeacherSignatureUrl: url })} placeholder="https://… (image of their signature)" />
             <p className="text-xs text-muted-foreground mt-1">Stamped on report cards alongside the class teacher's signature.</p>
           </div>
           <div className="grid grid-cols-2 gap-3">

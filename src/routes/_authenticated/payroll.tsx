@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Printer } from "lucide-react";
+import { Plus, Printer, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { money } from "@/lib/format";
 import { EmptyState } from "@/components/EmptyState";
@@ -27,6 +27,7 @@ function PayrollPage() {
   const [openP, setOpenP] = useState(false);
   const [openS, setOpenS] = useState(false);
   const [printSlip, setPrintSlip] = useState<any | null>(null);
+  const [editingSlip, setEditingSlip] = useState<any | null>(null);
 
   const { data: periods = [] } = useQuery({
     queryKey: ["periods"],
@@ -51,6 +52,16 @@ function PayrollPage() {
   const addSlip = useMutation({
     mutationFn: (f: any) => api.payroll.payslips.create({ ...f, periodId }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["payslips"] }); toast.success("Payslip added"); setOpenS(false); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const updateSlip = useMutation({
+    mutationFn: ({ id, ...f }: any) => api.payroll.payslips.update(id, f),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["payslips"] }); toast.success("Payslip corrected"); setEditingSlip(null); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const removeSlip = useMutation({
+    mutationFn: (id: string) => api.payroll.payslips.delete(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["payslips"] }); toast.success("Payslip deleted"); },
     onError: (e: any) => toast.error(e.message),
   });
   const approvePeriod = useMutation({
@@ -104,7 +115,11 @@ function PayrollPage() {
                 <TableCell className="text-right">{money(s.deductions)}</TableCell>
                 <TableCell className="text-right">{money(s.tax)}</TableCell>
                 <TableCell className="text-right font-semibold">{money(s.netPay)}</TableCell>
-                <TableCell><Button size="icon" variant="ghost" onClick={() => setPrintSlip({ ...s, period })}><Printer className="h-4 w-4" /></Button></TableCell>
+                <TableCell className="whitespace-nowrap">
+                  <Button size="icon" variant="ghost" onClick={() => setPrintSlip({ ...s, period })} title="Print"><Printer className="h-4 w-4" /></Button>
+                  <Button size="icon" variant="ghost" onClick={() => setEditingSlip(s)} title="Correct this payslip"><Pencil className="h-4 w-4" /></Button>
+                  <Button size="icon" variant="ghost" onClick={() => { if (confirm(`Delete the payslip for ${s.staff?.fullName}?`)) removeSlip.mutate(s.id); }} title="Delete"><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                </TableCell>
               </TableRow>
             ))}
             {slips.length > 0 && <TableRow><TableCell colSpan={5} className="text-right font-semibold">Total net</TableCell><TableCell className="text-right font-bold">{money(totalNet)}</TableCell><TableCell /></TableRow>}
@@ -112,6 +127,14 @@ function PayrollPage() {
         </Table></div>
       </div>
       {printSlip && <PayslipPrint slip={printSlip} onClose={() => setPrintSlip(null)} />}
+      {editingSlip && (
+        <Dialog open onOpenChange={() => setEditingSlip(null)}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Correct payslip — {editingSlip.staff?.fullName}</DialogTitle></DialogHeader>
+            <EditSlipForm slip={editingSlip} onSubmit={(f: any) => updateSlip.mutate({ id: editingSlip.id, ...f })} />
+          </DialogContent>
+        </Dialog>
+      )}
     </>
   );
 }
@@ -211,5 +234,23 @@ function SlipForm({ staff, onSubmit }: any) {
       </div>
       <DialogFooter><Button onClick={() => onSubmit(f)} disabled={!f.staffId}>Save</Button></DialogFooter>
     </DialogContent>
+  );
+}
+
+function EditSlipForm({ slip, onSubmit }: any) {
+  const [f, setF] = useState({ basic: slip.basic, allowances: slip.allowances, deductions: slip.deductions, tax: slip.tax });
+  return (
+    <>
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div><Label>Basic</Label><Input type="number" value={f.basic} onChange={(e) => setF({ ...f, basic: Number(e.target.value) })} /></div>
+          <div><Label>Allowances</Label><Input type="number" value={f.allowances} onChange={(e) => setF({ ...f, allowances: Number(e.target.value) })} /></div>
+          <div><Label>Deductions</Label><Input type="number" value={f.deductions} onChange={(e) => setF({ ...f, deductions: Number(e.target.value) })} /></div>
+          <div><Label>Tax</Label><Input type="number" value={f.tax} onChange={(e) => setF({ ...f, tax: Number(e.target.value) })} /></div>
+        </div>
+        <p className="text-sm text-muted-foreground">Net: {money(Number(f.basic) + Number(f.allowances) - Number(f.deductions) - Number(f.tax))}</p>
+      </div>
+      <DialogFooter><Button onClick={() => onSubmit(f)}>Save correction</Button></DialogFooter>
+    </>
   );
 }
