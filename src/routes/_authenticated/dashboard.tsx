@@ -73,6 +73,13 @@ function Dashboard() {
           </div>
         </div>
 
+        {/* Optional school photo — only shown once set under Settings */}
+        {school?.bannerUrl && (
+          <div className="overflow-hidden rounded-3xl border shadow-depth">
+            <img src={school.bannerUrl} alt="" className="w-full max-h-64 object-cover" />
+          </div>
+        )}
+
         {/* Announcements */}
         <Card className="overflow-hidden">
           <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">

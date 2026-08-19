@@ -454,7 +454,7 @@ function ReportCardPrint({ school, pupil, exam, marks, term, attendance, positio
           <div><p className="text-xs text-gray-500">Present</p><p className="font-bold text-green-700">{present}</p></div>
           <div><p className="text-xs text-gray-500">Absent</p><p className="font-bold text-red-600">{absent}</p></div>
           <div><p className="text-xs text-gray-500">Late</p><p className="font-bold text-orange-500">{late}</p></div>
-          <div><p className="text-xs text-gray-500">Attendance rate</p><p className="font-bold">{attPct != null ? `${present}/${attendance.length} (${attPct}%)` : "—"}</p></div>
+          <div><p className="text-xs text-gray-500">Attendance rate</p><p className="font-bold">{attPct != null ? `${attPct}%` : "—"}<span className="font-normal text-gray-500 text-xs">{attPct != null ? ` (${present}/${attendance.length})` : ""}</span></p></div>
         </div>
       )}
 

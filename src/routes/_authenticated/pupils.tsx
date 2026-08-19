@@ -34,6 +34,7 @@ function Pupils() {
 
   const { data: classes = [] } = useQuery({ queryKey: ["classes"], queryFn: () => api.classes.list() });
   const { data: guardians = [] } = useQuery({ queryKey: ["guardians-pick"], queryFn: () => api.guardians.list() });
+  const { data: transportRoutes = [] } = useQuery({ queryKey: ["transport-routes"], queryFn: () => api.transport.routes.list() });
 
   // Teachers only see pupils in the class(es) they're the class teacher for, not the
   // whole school — matches the same "my classes" scoping used on Attendance/Marks.
@@ -50,12 +51,17 @@ function Pupils() {
     queryFn: () => api.pupils.list(q || undefined),
   });
   const isLoading = isTeacher ? (myClasses.length > 0 && myPupilsLoading) : pageLoading;
-  const pupils = isTeacher
+  const [classFilter, setClassFilter] = useState("ALL");
+  const [genderFilter, setGenderFilter] = useState("ALL");
+  const searchedPupils = isTeacher
     ? myClassPupils.filter((p) => {
         const s = q.toLowerCase().trim();
         return !s || p.fullName.toLowerCase().includes(s) || p.admissionNo.toLowerCase().includes(s);
       })
     : page?.content ?? [];
+  const pupils = searchedPupils.filter((p) =>
+    (classFilter === "ALL" || p.schoolClass?.id === classFilter) &&
+    (genderFilter === "ALL" || p.gender === genderFilter));
 
   const create = useMutation({
     mutationFn: async (form: any) => {
@@ -82,6 +88,13 @@ function Pupils() {
           temporaryPassword: form.gTemporaryPassword || undefined,
         });
         await api.guardians.link(guardian.id, pupil.id, true);
+      }
+      if (form.routeId) {
+        await api.transport.assignments.create({
+          pupilId: pupil.id,
+          routeId: form.routeId,
+          pickupPointId: form.pickupPointId || undefined,
+        });
       }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["pupils"] }); toast.success("Pupil added"); setOpen(false); },
@@ -120,7 +133,7 @@ function Pupils() {
               <Button variant="outline" onClick={() => setImportOpen(true)}><Upload className="h-4 w-4 mr-1" /> Bulk import</Button>
               <Dialog open={open} onOpenChange={setOpen}>
                 <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Add pupil</Button></DialogTrigger>
-                <PupilForm onSubmit={(f: any) => create.mutate(f)} classes={classes} guardians={guardians} />
+                <PupilForm onSubmit={(f: any) => create.mutate(f)} classes={classes} guardians={guardians} transportRoutes={transportRoutes} />
               </Dialog>
             </>
           )
@@ -132,6 +145,21 @@ function Pupils() {
             <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
             <Input className="pl-9" placeholder="Search name or admission no…" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
+          <Select value={classFilter} onValueChange={setClassFilter}>
+            <SelectTrigger className="w-[160px]"><SelectValue placeholder="All classes" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All classes</SelectItem>
+              {(isTeacher ? myClasses : classes).map((c) => <SelectItem key={c.id} value={c.id}>{c.name}{c.stream ? ` ${c.stream}` : ""}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={genderFilter} onValueChange={setGenderFilter}>
+            <SelectTrigger className="w-[140px]"><SelectValue placeholder="All genders" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All genders</SelectItem>
+              <SelectItem value="Male">Male</SelectItem>
+              <SelectItem value="Female">Female</SelectItem>
+            </SelectContent>
+          </Select>
           {!isLoading && (
             <span className="text-[12px] text-muted-foreground shrink-0">
               {pupils.length.toLocaleString()} {pupils.length === 1 ? "pupil" : "pupils"}
@@ -254,14 +282,21 @@ function Pupils() {
   );
 }
 
-function PupilForm({ onSubmit, classes, guardians }: any) {
+function PupilForm({ onSubmit, classes, guardians, transportRoutes = [] }: any) {
   const [form, setForm] = useState({
     admissionNo: "", fullName: "", gender: "", dob: "", classId: "",
     address: "", bloodGroup: "", allergies: "", medicalInfo: "", photoUrl: "",
     gMode: "existing" as "new" | "existing",
     gExistingId: "", gFullName: "", gRelationship: "", gPhone: "", gEmail: "", gTemporaryPassword: "",
+    routeId: "", pickupPointId: "",
   });
   const set = (k: string, v: any) => setForm({ ...form, [k]: v });
+  const set2 = (patch: any) => setForm({ ...form, ...patch });
+  const { data: routePoints = [] } = useQuery({
+    queryKey: ["route-points", form.routeId],
+    enabled: !!form.routeId,
+    queryFn: () => api.transport.points.list(form.routeId),
+  });
   const [gSearch, setGSearch] = useState("");
   const filtered = guardians.filter((g: any) => {
     const s = gSearch.toLowerCase().trim();
@@ -272,10 +307,11 @@ function PupilForm({ onSubmit, classes, guardians }: any) {
     <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
       <DialogHeader><DialogTitle>Admit a new pupil</DialogTitle></DialogHeader>
       <Tabs defaultValue="bio" className="w-full">
-        <TabsList className="grid grid-cols-4 w-full">
+        <TabsList className="grid grid-cols-5 w-full">
           <TabsTrigger value="bio">Bio</TabsTrigger>
           <TabsTrigger value="academic">Academic</TabsTrigger>
           <TabsTrigger value="guardian">Guardian</TabsTrigger>
+          <TabsTrigger value="transport">Transport</TabsTrigger>
           <TabsTrigger value="welfare">Welfare</TabsTrigger>
         </TabsList>
         <TabsContent value="bio" className="space-y-3 pt-2">
@@ -343,6 +379,25 @@ function PupilForm({ onSubmit, classes, guardians }: any) {
                 <p className="text-xs text-muted-foreground mt-1">Provide this to create the parent's portal login immediately.</p>
               </div>
             </>
+          )}
+        </TabsContent>
+        <TabsContent value="transport" className="space-y-3 pt-2">
+          <div><Label>Route</Label>
+            <Select value={form.routeId} onValueChange={(v) => set2({ routeId: v, pickupPointId: "" })}>
+              <SelectTrigger><SelectValue placeholder="No transport needed" /></SelectTrigger>
+              <SelectContent>{transportRoutes.map((r: any) => <SelectItem key={r.id} value={r.id}>{r.name}{r.fee ? ` — ${r.fee}` : ""}</SelectItem>)}</SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">Assigning a route bills the pickup point's transport fee (or the route's base fee if no point is picked) to this pupil automatically.</p>
+          </div>
+          {form.routeId && (
+            <div>
+              <Label>Pickup point</Label>
+              <Select value={form.pickupPointId} onValueChange={(v) => set("pickupPointId", v)}>
+                <SelectTrigger><SelectValue placeholder={`Route base fee — ${transportRoutes.find((r: any) => r.id === form.routeId)?.fee ?? 0}`} /></SelectTrigger>
+                <SelectContent>{routePoints.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name} — {p.fee}</SelectItem>)}</SelectContent>
+              </Select>
+              {routePoints.length === 0 && <p className="text-xs text-muted-foreground mt-1">No priced pickup points set up for this route yet — the route's base fee will be billed.</p>}
+            </div>
           )}
         </TabsContent>
         <TabsContent value="welfare" className="space-y-3 pt-2">

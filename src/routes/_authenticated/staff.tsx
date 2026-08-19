@@ -246,7 +246,16 @@ function StaffForm({ onSubmit, initial }: any) {
             <div><Label>Contract end date</Label><Input type="date" value={f.contractEndDate} onChange={(e) => set("contractEndDate", e.target.value)} /></div>
           )}
           <div><Label>Qualifications</Label><Textarea rows={2} value={f.qualifications} onChange={(e) => set("qualifications", e.target.value)} /></div>
-          <div className="flex items-center gap-2 pt-2"><Switch checked={f.isTeacher} onCheckedChange={(v) => set("isTeacher", v)} /><Label>Is teacher</Label></div>
+          <div className="pt-2 space-y-1">
+            <div className="flex items-center gap-2"><Switch checked={f.isTeacher} onCheckedChange={(v) => set("isTeacher", v)} /><Label>Is teacher</Label></div>
+            <p className="text-xs text-muted-foreground">
+              {f.isTeacher
+                ? "Grants the TEACHER role once a login exists, locking access to the class(es) they're assigned as class teacher of — homework, report cards, registers, transport and canteen for other classes stay hidden."
+                : "Turning this off revokes the TEACHER role from their login on save."}
+              {" "}Adjust exactly what TEACHER can access under{" "}
+              <Link to="/users" className="underline hover:text-foreground">Users &amp; Roles → Roles &amp; Permissions</Link>.
+            </p>
+          </div>
         </TabsContent>
         <TabsContent value="payroll" className="space-y-3">
           <div><Label>Basic salary</Label><Input type="number" value={f.basicSalary} onChange={(e) => set("basicSalary", Number(e.target.value))} /></div>

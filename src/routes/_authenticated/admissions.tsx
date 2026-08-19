@@ -11,9 +11,10 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/EmptyState";
+import { money } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/admissions")({
   head: () => ({ meta: [{ title: "Admissions" }] }),
@@ -25,6 +26,7 @@ const STATUSES = ["APPLIED", "REVIEWING", "INTERVIEWED", "ADMITTED", "REJECTED",
 function AdmissionsPage() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [feeFor, setFeeFor] = useState<any | null>(null);
   const { data: classes = [] } = useQuery({ queryKey: ["classes-min"], queryFn: () => api.classes.list() });
   const { data = [] } = useQuery({ queryKey: ["admissions"], queryFn: () => api.admissions.list() });
   const create = useMutation({
@@ -37,8 +39,10 @@ function AdmissionsPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admissions"] }),
     onError: (e: any) => toast.error(e.message),
   });
+  // Actually creates a Pupil record (previously this just flipped a status label with no
+  // real pupil ever created, so admissions never showed up anywhere else in the system).
   const enrol = useMutation({
-    mutationFn: (id: string) => api.admissions.updateStatus(id, "ENROLLED"),
+    mutationFn: (id: string) => api.admissions.enroll(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["admissions"] }); qc.invalidateQueries({ queryKey: ["pupils"] }); toast.success("Pupil enrolled"); },
     onError: (e: any) => toast.error(e.message),
   });
@@ -62,10 +66,10 @@ function AdmissionsPage() {
           <Table>
             <TableHeader><TableRow>
               <TableHead>Ref</TableHead><TableHead>Name</TableHead><TableHead>Target class</TableHead>
-              <TableHead>Parent</TableHead><TableHead>Status</TableHead><TableHead></TableHead>
+              <TableHead>Parent</TableHead><TableHead>Reg. fee</TableHead><TableHead>Status</TableHead><TableHead></TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {data.length === 0 ? <TableRow><TableCell colSpan={6}><EmptyState /></TableCell></TableRow>
+              {data.length === 0 ? <TableRow><TableCell colSpan={7}><EmptyState /></TableCell></TableRow>
                 : data.map((a) => (
                   <TableRow key={a.id}>
                     <TableCell className="font-mono text-xs">{a.applicationNo}</TableCell>
@@ -73,14 +77,21 @@ function AdmissionsPage() {
                     <TableCell>{a.targetClass ? `${a.targetClass.name}${a.targetClass.stream ? " " + a.targetClass.stream : ""}` : "—"}</TableCell>
                     <TableCell>{a.parentName ?? "—"}<div className="text-xs text-muted-foreground">{a.parentPhone ?? ""}</div></TableCell>
                     <TableCell>
+                      {a.regFeePaid ? (
+                        <span className="text-emerald-600 font-medium text-sm">{money(a.regFeePaid)}</span>
+                      ) : (
+                        <Button size="sm" variant="outline" onClick={() => setFeeFor(a)}><Wallet className="h-3.5 w-3.5 mr-1" /> Record fee</Button>
+                      )}
+                    </TableCell>
+                    <TableCell>
                       <Select value={a.status} onValueChange={(v) => setStatus.mutate({ id: a.id, status: v })}>
                         <SelectTrigger className="h-8 w-36"><SelectValue /></SelectTrigger>
                         <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{s.toLowerCase()}</SelectItem>)}</SelectContent>
                       </Select>
                     </TableCell>
                     <TableCell className="flex items-center gap-2">
-                      {a.status === "ADMITTED" && <Button size="sm" variant="secondary" onClick={() => enrol.mutate(a.id)}>Enrol</Button>}
-                      {a.status === "ENROLLED" && <Badge>Enrolled</Badge>}
+                      {a.status === "ADMITTED" && !a.pupil && <Button size="sm" variant="secondary" onClick={() => enrol.mutate(a.id)} disabled={enrol.isPending}>Enrol</Button>}
+                      {a.pupil && <Badge>Enrolled</Badge>}
                       <Button variant="ghost" size="icon" onClick={() => { if (confirm(`Delete application ${a.applicationNo}?`)) remove.mutate(a.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                     </TableCell>
                   </TableRow>
@@ -89,7 +100,41 @@ function AdmissionsPage() {
           </Table>
         </div>
       </div>
+      {feeFor && (
+        <Dialog open onOpenChange={(o) => !o && setFeeFor(null)}>
+          <RegFeeDialog admission={feeFor} onClose={() => setFeeFor(null)} />
+        </Dialog>
+      )}
     </>
+  );
+}
+
+function RegFeeDialog({ admission, onClose }: { admission: any; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [f, setF] = useState({ regFeePaid: 0, regFeePaidOn: new Date().toISOString().slice(0, 10), regFeePaymentMethod: "CASH" });
+  const save = useMutation({
+    mutationFn: () => api.admissions.update(admission.id, f),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admissions"] }); toast.success("Registration fee recorded"); onClose(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  return (
+    <DialogContent>
+      <DialogHeader><DialogTitle>Record registration fee — {admission.fullName}</DialogTitle></DialogHeader>
+      <div className="space-y-3">
+        <p className="text-xs text-muted-foreground">This is tracked as income immediately — it doesn't wait for the applicant to be enrolled as a pupil.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div><Label>Amount paid</Label><Input type="number" step="0.01" value={f.regFeePaid} onChange={(e) => setF({ ...f, regFeePaid: Number(e.target.value) })} /></div>
+          <div><Label>Date paid</Label><Input type="date" value={f.regFeePaidOn} onChange={(e) => setF({ ...f, regFeePaidOn: e.target.value })} /></div>
+        </div>
+        <div><Label>Method</Label>
+          <Select value={f.regFeePaymentMethod} onValueChange={(v) => setF({ ...f, regFeePaymentMethod: v })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>{["CASH", "BANK", "MOBILE_MONEY", "CARD", "CHEQUE"].map((m) => <SelectItem key={m} value={m}>{m.replace("_", " ")}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+      </div>
+      <DialogFooter><Button onClick={() => save.mutate()} disabled={!f.regFeePaid || save.isPending}>{save.isPending ? "Saving…" : "Save"}</Button></DialogFooter>
+    </DialogContent>
   );
 }
 

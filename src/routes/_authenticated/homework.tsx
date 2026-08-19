@@ -26,13 +26,12 @@ function Homework() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ title: "", description: "", classId: "", subjectId: "", dueDate: "" });
-  const { data: allHomework = [] } = useQuery({ queryKey: ["homework"], queryFn: () => api.homework.list() });
+  // The backend already scopes GET /homework to the caller's assigned class(es) for a
+  // TEACHER-tier role (see ClassScopeService), so this list is never re-filtered client-side.
+  const { data = [] } = useQuery({ queryKey: ["homework"], queryFn: () => api.homework.list() });
   const { data: myClasses = [] } = useQuery({ queryKey: ["my-classes"], enabled: isTeacher, queryFn: () => api.classes.myClasses() });
   const { data: allClasses = [] } = useQuery({ queryKey: ["classes-hw"], enabled: !isTeacher, queryFn: () => api.classes.list() });
   const classes = isTeacher ? myClasses : allClasses;
-  const myClassIds = new Set(myClasses.map((c) => c.id));
-  // Teachers only manage homework for the class(es) they teach, not the whole school.
-  const data = isTeacher ? allHomework.filter((h) => h.schoolClass && myClassIds.has(h.schoolClass.id)) : allHomework;
   const { data: subjects = [] } = useQuery({ queryKey: ["subjects-hw"], queryFn: () => api.subjects.list() });
   const create = useMutation({
     mutationFn: () => api.homework.create({ title: f.title, description: f.description || undefined, classId: f.classId || undefined, subjectId: f.subjectId || undefined, dueDate: f.dueDate || undefined }),

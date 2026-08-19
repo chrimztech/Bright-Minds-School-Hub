@@ -12,12 +12,14 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, PackageCheck, X } from "lucide-react";
 import { toast } from "sonner";
 import { money } from "@/lib/format";
 import { EmptyState } from "@/components/EmptyState";
 
-const PO_STATUSES = ["DRAFT","SENT","RECEIVED","CANCELLED","PAID"];
+// RECEIVED is intentionally excluded — it's only reachable via the dedicated "Receive"
+// action, which is what actually credits inventory stock (see ProcurementController).
+const PO_STATUSES = ["DRAFT","SENT","CANCELLED","PAID"];
 
 export const Route = createFileRoute("/_authenticated/procurement")({
   head: () => ({ meta: [{ title: "Procurement" }] }),
@@ -91,6 +93,7 @@ function POs() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const { data: sups = [] } = useQuery({ queryKey: ["sups-min"], queryFn: () => api.procurement.suppliers.list() });
+  const { data: invItems = [] } = useQuery({ queryKey: ["inventory-min"], queryFn: () => api.inventory.items.list() });
   const { data = [] } = useQuery({ queryKey: ["pos"], queryFn: () => api.procurement.orders.list() });
   const create = useMutation({
     mutationFn: (f: any) => api.procurement.orders.create(f),
@@ -102,18 +105,40 @@ function POs() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["pos"] }),
     onError: (e: any) => toast.error(e.message),
   });
+  // Actually credits inventory stock for each line item (previously "Received" was just a
+  // status label with no connection to inventory at all).
+  const receive = useMutation({
+    mutationFn: (id: string) => api.procurement.orders.receive(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["pos"] }); qc.invalidateQueries({ queryKey: ["inventory-min"] }); toast.success("Order received — stock updated"); },
+    onError: (e: any) => toast.error(e.message),
+  });
   const removePo = useMutation({
     mutationFn: (id: string) => api.procurement.orders.delete(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["pos"] }); toast.success("Deleted"); },
     onError: (e: any) => toast.error(e.message),
   });
-  const [f, setF] = useState({ supplierId: "", orderDate: new Date().toISOString().slice(0,10), total: 0, notes: "" });
+  const [f, setF] = useState<any>({ supplierId: "", orderDate: new Date().toISOString().slice(0,10), total: 0, notes: "", items: [] as { itemId: string; quantity: number; unitCost: number }[] });
+
+  function addLine() { setF({ ...f, items: [...f.items, { itemId: "", quantity: 1, unitCost: 0 }] }); }
+  function updateLine(i: number, patch: any) {
+    const items = f.items.slice();
+    items[i] = { ...items[i], ...patch };
+    if (patch.itemId) {
+      const item = invItems.find((x) => x.id === patch.itemId);
+      if (item?.unitCost != null) items[i].unitCost = item.unitCost;
+    }
+    setF({ ...f, items });
+  }
+  function removeLine(i: number) { setF({ ...f, items: f.items.filter((_: any, idx: number) => idx !== i) }); }
+  const lineTotal = f.items.reduce((a: number, it: any) => a + (Number(it.quantity) || 0) * (Number(it.unitCost) || 0), 0);
+
   return (
     <div className="space-y-3 mt-4">
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) setF({ supplierId: "", orderDate: new Date().toISOString().slice(0,10), total: 0, notes: "", items: [] }); }}>
         <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> New PO</Button></DialogTrigger>
-        <DialogContent><DialogHeader><DialogTitle>New purchase order</DialogTitle></DialogHeader>
-          <div className="space-y-3">
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>New purchase order</DialogTitle></DialogHeader>
+          <div className="space-y-3 max-h-[65vh] overflow-y-auto pr-1">
             <div><Label>Supplier</Label>
               <Select value={f.supplierId} onValueChange={(v) => setF({ ...f, supplierId: v })}>
                 <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
@@ -122,11 +147,34 @@ function POs() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Date</Label><Input type="date" value={f.orderDate} onChange={(e) => setF({ ...f, orderDate: e.target.value })} /></div>
-              <div><Label>Total</Label><Input type="number" step="0.01" value={f.total} onChange={(e) => setF({ ...f, total: Number(e.target.value) })} /></div>
+              {f.items.length === 0 && <div><Label>Total</Label><Input type="number" step="0.01" value={f.total} onChange={(e) => setF({ ...f, total: Number(e.target.value) })} /></div>}
             </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Items ordered (enables receiving into stock)</Label>
+                <Button type="button" size="sm" variant="outline" onClick={addLine}><Plus className="h-3.5 w-3.5 mr-1" /> Add item</Button>
+              </div>
+              {f.items.length === 0 && <p className="text-xs text-muted-foreground">No items added — this PO will be a plain record with a manual total and can't be received into stock. Add items to enable that.</p>}
+              {f.items.map((line: any, i: number) => (
+                <div key={i} className="flex items-end gap-2">
+                  <div className="flex-1"><Label className="text-xs">Item</Label>
+                    <Select value={line.itemId} onValueChange={(v) => updateLine(i, { itemId: v })}>
+                      <SelectTrigger><SelectValue placeholder="Select inventory item" /></SelectTrigger>
+                      <SelectContent>{invItems.map((it) => <SelectItem key={it.id} value={it.id}>{it.name}{it.unit ? ` (${it.unit})` : ""}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div className="w-20"><Label className="text-xs">Qty</Label><Input type="number" value={line.quantity} onChange={(e) => updateLine(i, { quantity: Number(e.target.value) })} /></div>
+                  <div className="w-28"><Label className="text-xs">Unit cost</Label><Input type="number" step="0.01" value={line.unitCost} onChange={(e) => updateLine(i, { unitCost: Number(e.target.value) })} /></div>
+                  <Button type="button" size="icon" variant="ghost" onClick={() => removeLine(i)}><X className="h-4 w-4 text-destructive" /></Button>
+                </div>
+              ))}
+              {f.items.length > 0 && <p className="text-sm text-right font-medium">Total: {money(lineTotal)}</p>}
+            </div>
+
             <div><Label>Notes</Label><Textarea value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></div>
           </div>
-          <DialogFooter><Button onClick={() => create.mutate(f)} disabled={!f.supplierId}>Save</Button></DialogFooter>
+          <DialogFooter><Button onClick={() => create.mutate(f)} disabled={!f.supplierId || f.items.some((it: any) => !it.itemId || !it.quantity)}>Save</Button></DialogFooter>
         </DialogContent>
       </Dialog>
       <div className="rounded-lg border bg-card"><Table>
@@ -139,12 +187,23 @@ function POs() {
               <TableCell>{p.orderDate}</TableCell>
               <TableCell className="text-right">{money(p.total)}</TableCell>
               <TableCell>
-                <Select value={p.status} onValueChange={(v) => setStatus.mutate({ id: p.id, status: v })}>
-                  <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
-                  <SelectContent>{PO_STATUSES.map((s) => <SelectItem key={s} value={s}>{s.toLowerCase()}</SelectItem>)}</SelectContent>
-                </Select>
+                {p.receivedAt ? (
+                  <Badge>Received</Badge>
+                ) : (
+                  <Select value={p.status} onValueChange={(v) => setStatus.mutate({ id: p.id, status: v })}>
+                    <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
+                    <SelectContent>{PO_STATUSES.map((s) => <SelectItem key={s} value={s}>{s.toLowerCase()}</SelectItem>)}</SelectContent>
+                  </Select>
+                )}
               </TableCell>
-              <TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => { if (confirm(`Delete ${p.poNo}?`)) removePo.mutate(p.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button></TableCell>
+              <TableCell className="text-right whitespace-nowrap">
+                {!p.receivedAt && p.status !== "CANCELLED" && (
+                  <Button size="sm" variant="secondary" onClick={() => receive.mutate(p.id)} disabled={receive.isPending} title="Credit ordered quantities to inventory stock">
+                    <PackageCheck className="h-3.5 w-3.5 mr-1" /> Receive
+                  </Button>
+                )}
+                <Button variant="ghost" size="icon" onClick={() => { if (confirm(`Delete ${p.poNo}?`)) removePo.mutate(p.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>

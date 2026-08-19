@@ -52,8 +52,8 @@ const GROUPS: NavGroup[] = [
   {
     label: "Operations",
     items: [
-      { to: "/library", label: "Library", icon: Library },
-      { to: "/transport", label: "Transport", icon: Bus },
+      { to: "/library", label: "Library", icon: Library, roles: ADMIN_ROLES },
+      { to: "/transport", label: "Transport", icon: Bus, roles: ADMIN_ROLES },
       { to: "/canteen", label: "Canteen", icon: UtensilsCrossed, roles: FINANCE_ROLES },
       { to: "/health", label: "Health", icon: HeartPulse, roles: ADMIN_ROLES },
       { to: "/inventory", label: "Inventory", icon: Boxes, roles: ADMIN_ROLES },

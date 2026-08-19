@@ -10,11 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Printer, Pencil, Trash2 } from "lucide-react";
+import { Plus, Printer, Pencil, Trash2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { money } from "@/lib/format";
 import { EmptyState } from "@/components/EmptyState";
 import { PrintOverlay, DocHeader, useSchool } from "@/components/PrintableDoc";
+import { useAuth, hasAny, ADMIN_ROLES } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/payroll")({
   head: () => ({ meta: [{ title: "Payroll" }] }),
@@ -23,6 +24,9 @@ export const Route = createFileRoute("/_authenticated/payroll")({
 
 function PayrollPage() {
   const qc = useQueryClient();
+  const { roles } = useAuth();
+  // payroll:reverse (correcting/deleting a recorded payslip) is admin-tier only by default.
+  const canReverse = hasAny(roles, ADMIN_ROLES);
   const [periodId, setPeriodId] = useState<string>("");
   const [openP, setOpenP] = useState(false);
   const [openS, setOpenS] = useState(false);
@@ -70,7 +74,9 @@ function PayrollPage() {
   });
   const markPaid = useMutation({
     mutationFn: () => api.payroll.periods.markPaid(periodId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["periods"] }),
+    // Marking a period paid now also records a Salaries expense — keep Accounts in sync
+    // if it's already mounted elsewhere in the app.
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["periods"] }); qc.invalidateQueries({ queryKey: ["expenses"] }); },
   });
 
   const totalNet = slips.reduce((a, s) => a + Number(s.netPay), 0);
@@ -117,8 +123,16 @@ function PayrollPage() {
                 <TableCell className="text-right font-semibold">{money(s.netPay)}</TableCell>
                 <TableCell className="whitespace-nowrap">
                   <Button size="icon" variant="ghost" onClick={() => setPrintSlip({ ...s, period })} title="Print"><Printer className="h-4 w-4" /></Button>
-                  <Button size="icon" variant="ghost" onClick={() => setEditingSlip(s)} title="Correct this payslip"><Pencil className="h-4 w-4" /></Button>
-                  <Button size="icon" variant="ghost" onClick={() => { if (confirm(`Delete the payslip for ${s.staff?.fullName}?`)) removeSlip.mutate(s.id); }} title="Delete"><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  {canReverse && (
+                    <>
+                      <Button size="sm" variant="ghost" onClick={() => setEditingSlip(s)} title="Correct this payslip"><Pencil className="h-4 w-4 mr-1" /> Correct</Button>
+                      <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive"
+                        onClick={() => { if (confirm(`Reverse the payslip for ${s.staff?.fullName}? It will be removed from this period.`)) removeSlip.mutate(s.id); }}
+                        title="Reverse — remove this payslip">
+                        <RotateCcw className="h-4 w-4 mr-1" /> Reverse
+                      </Button>
+                    </>
+                  )}
                 </TableCell>
               </TableRow>
             ))}

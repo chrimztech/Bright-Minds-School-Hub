@@ -11,10 +11,12 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Printer, Trash2, Receipt, Pencil } from "lucide-react";
+import { Plus, Printer, Trash2, Receipt, Pencil, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { money } from "@/lib/format";
 import { PrintOverlay, DocHeader, useSchool } from "@/components/PrintableDoc";
+import { ReceiptPrint } from "@/components/ReceiptPrint";
+import { useAuth, hasAny, ADMIN_ROLES } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/fees")({
   head: () => ({ meta: [{ title: "Fees & payments" }] }),
@@ -257,6 +259,10 @@ function InvoicePrint({ id, onClose }: { id: string; onClose: () => void }) {
 
 function PaymentsTab() {
   const qc = useQueryClient();
+  const { roles } = useAuth();
+  // fees:reverse (correcting/deleting a recorded payment) is admin-tier only by default —
+  // Accountants keep fees:collect for normal collection but can't rewrite payment history.
+  const canReverse = hasAny(roles, ADMIN_ROLES);
   const [open, setOpen] = useState(false);
   const [receiptFor, setReceiptFor] = useState<Payment | null>(null);
   const [editing, setEditing] = useState<Payment | null>(null);
@@ -379,8 +385,18 @@ function PaymentsTab() {
                   </TableCell>
                   <TableCell className="text-right whitespace-nowrap">
                     <Button size="icon" variant="ghost" onClick={() => setReceiptFor(p)} title="Print receipt"><Printer className="h-4 w-4" /></Button>
-                    <Button size="icon" variant="ghost" onClick={() => setEditing(p)} title="Correct this payment"><Pencil className="h-4 w-4" /></Button>
-                    <Button size="icon" variant="ghost" onClick={() => { if (confirm(`Delete this payment of ${money(p.amount)}? The invoice balance will be updated.`)) remove.mutate(p.id); }} title="Delete"><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                    {canReverse && (
+                      <>
+                        <Button size="sm" variant="ghost" onClick={() => setEditing(p)} title="Correct the amount, method or date on this payment">
+                          <Pencil className="h-4 w-4 mr-1" /> Correct
+                        </Button>
+                        <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive"
+                          onClick={() => { if (confirm(`Reverse this payment of ${money(p.amount)}? It will be removed and the invoice balance restored to what it was before this payment.`)) remove.mutate(p.id); }}
+                          title="Reverse this payment — removes it and restores the invoice balance">
+                          <RotateCcw className="h-4 w-4 mr-1" /> Reverse
+                        </Button>
+                      </>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -455,55 +471,6 @@ function PendingPaymentsTab() {
   );
 }
 
-function ReceiptPrint({ payment, onClose }: { payment: Payment; onClose: () => void }) {
-  const { data: school } = useSchool();
-  const inv = payment.invoice;
-  const balance = inv ? Number(inv.total) - Number(inv.paid) : null;
-  return (
-    <PrintOverlay onClose={onClose}>
-      <div className="p-10 font-sans">
-        <DocHeader school={{ ...school, logoUrl: school?.logoUrl ?? "/logo.png" }} title="Receipt" />
-        <div className="grid grid-cols-2 gap-8 text-sm mb-8">
-          <div>
-            <p className="uppercase text-[10px] tracking-widest text-gray-500 mb-1">Received from</p>
-            <p className="font-semibold text-lg">{payment.pupil?.fullName}</p>
-            <p className="text-gray-600">Adm #: {payment.pupil?.admissionNo}</p>
-          </div>
-          <div className="text-right">
-            <p><span className="text-gray-500">Receipt no:</span> <span className="font-mono">{payment.receiptNo}</span></p>
-            <p><span className="text-gray-500">Date:</span> {payment.paidOn}</p>
-            <p><span className="text-gray-500">Method:</span> {payment.method.replace("_", " ")}</p>
-            {payment.reference && <p><span className="text-gray-500">Reference:</span> {payment.reference}</p>}
-          </div>
-        </div>
-        <table className="w-full text-sm border-collapse mb-8">
-          <thead><tr className="border-b-2 border-black text-left">
-            <th className="py-2">Description</th>
-            <th className="py-2 text-right">Amount</th>
-          </tr></thead>
-          <tbody>
-            <tr className="border-b border-gray-200">
-              <td className="py-3">{inv ? `Payment towards invoice ${inv.invoiceNo}${inv.description ? " — " + inv.description : ""}` : "School fee payment"}</td>
-              <td className="py-3 text-right">{money(payment.amount)}</td>
-            </tr>
-          </tbody>
-          {inv && (
-            <tfoot>
-              <tr><td className="pt-4 text-right text-gray-500">Invoice total</td><td className="pt-4 text-right">{money(inv.total)}</td></tr>
-              <tr><td className="text-right text-gray-500">Total paid to date</td><td className="text-right">{money(inv.paid)}</td></tr>
-              <tr className="text-lg font-bold"><td className="pt-2 text-right">Balance remaining</td><td className="pt-2 text-right">{money(balance ?? 0)}</td></tr>
-            </tfoot>
-          )}
-        </table>
-        <div className="border-t border-gray-300 pt-6 text-xs text-gray-500 flex justify-between">
-          <p>Thank you for partnering with us in your child's education.</p>
-          <p>Generated {new Date().toLocaleString()}</p>
-        </div>
-      </div>
-    </PrintOverlay>
-  );
-}
-
 function EditPaymentForm({ payment, onSubmit }: { payment: Payment; onSubmit: (f: any) => void }) {
   const [f, setF] = useState({ amount: payment.amount, method: payment.method, reference: payment.reference ?? "" });
   return (
@@ -533,10 +500,16 @@ const FEE_CATEGORIES = [
   { value: "TRANSPORT", label: "Transport" },
   { value: "FOOD", label: "Food / Canteen" },
   { value: "UNIFORM", label: "Uniform" },
+  { value: "ADMIN_FEE", label: "Administrative Fee" },
+  { value: "REGISTRATION", label: "Registration" },
   { value: "EXAM", label: "Examination" },
   { value: "ACTIVITY", label: "Activity / Trips" },
   { value: "OTHER", label: "Other" },
 ];
+
+// Categories where a due date matters enough to always ask for one — an admin fee or
+// registration charge past this date is what makes the existing late-fee sweep apply.
+const DUE_DATE_CATEGORIES = new Set(["ADMIN_FEE", "REGISTRATION"]);
 
 function categoryLabel(cat: string) {
   return FEE_CATEGORIES.find((c) => c.value === cat)?.label ?? cat;
@@ -544,15 +517,15 @@ function categoryLabel(cat: string) {
 
 function FeeItemsTab() {
   const qc = useQueryClient();
-  const [f, setF] = useState<any>({ name: "", category: "SCHOOL_FEE", amount: 0, classId: "", termId: "", isRecurring: true });
+  const [f, setF] = useState<any>({ name: "", category: "SCHOOL_FEE", amount: 0, classId: "", termId: "", isRecurring: true, dueDate: "" });
   const [billOpen, setBillOpen] = useState(false);
   const [filterCat, setFilterCat] = useState("ALL");
   const { data = [] } = useQuery({ queryKey: ["fee_items"], queryFn: () => api.fees.items.list() });
   const { data: classes = [] } = useQuery({ queryKey: ["classes-pick"], queryFn: () => api.classes.list() });
   const { data: terms = [] } = useQuery({ queryKey: ["terms-pick"], queryFn: () => api.academicYears.terms.all() });
   const create = useMutation({
-    mutationFn: () => api.fees.items.create({ name: f.name, category: f.category, amount: f.amount, classId: f.classId || undefined, termId: f.termId || undefined, isRecurring: f.isRecurring }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["fee_items"] }); toast.success("Fee item added"); setF({ name: "", category: "SCHOOL_FEE", amount: 0, classId: "", termId: "", isRecurring: true }); },
+    mutationFn: () => api.fees.items.create({ name: f.name, category: f.category, amount: f.amount, classId: f.classId || undefined, termId: f.termId || undefined, isRecurring: f.isRecurring, dueDate: f.dueDate || undefined }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["fee_items"] }); toast.success("Fee item added"); setF({ name: "", category: "SCHOOL_FEE", amount: 0, classId: "", termId: "", isRecurring: true, dueDate: "" }); },
     onError: (e: any) => toast.error(e.message),
   });
   const update = useMutation({
@@ -599,8 +572,14 @@ function FeeItemsTab() {
               </SelectContent>
             </Select>
           </div>
+          {DUE_DATE_CATEGORIES.has(f.category) && (
+            <div><Label>Due date</Label><Input type="date" value={f.dueDate} onChange={(e) => setF({ ...f, dueDate: e.target.value })} /></div>
+          )}
           <Button onClick={() => create.mutate()} disabled={!f.name || !f.amount}><Plus className="h-4 w-4 mr-1" /> Add</Button>
         </div>
+        {DUE_DATE_CATEGORIES.has(f.category) && (
+          <p className="text-xs text-muted-foreground">Invoices billed from this item become eligible for the administrative late-payment fee once their due date passes.</p>
+        )}
       </div>
 
       <div className="flex items-center justify-between">

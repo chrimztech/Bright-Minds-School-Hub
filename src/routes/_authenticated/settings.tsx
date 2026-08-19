@@ -23,7 +23,7 @@ function Settings() {
   const save = useMutation({
     mutationFn: async () => api.settings.update({
       name: f.name, motto: f.motto, address: f.address, phone: f.phone, email: f.email,
-      website: f.website, currency: f.currency || "ZMW", logoUrl: f.logoUrl,
+      website: f.website, currency: f.currency || "ZMW", logoUrl: f.logoUrl, bannerUrl: f.bannerUrl,
       city: f.city, province: f.province, country: f.country || "Zambia",
       postalCode: f.postalCode, poBox: f.poBox, district: f.district, plotNumber: f.plotNumber,
       latitude: f.latitude === "" ? undefined : Number(f.latitude) || undefined,
@@ -46,6 +46,11 @@ function Settings() {
           <div><Label>School name</Label><Input value={f.name ?? ""} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
           <div><Label>Motto</Label><Input value={f.motto ?? ""} onChange={(e) => setF({ ...f, motto: e.target.value })} /></div>
           <div><Label>Logo</Label><ImageUploadField value={f.logoUrl ?? ""} onChange={(url) => setF({ ...f, logoUrl: url })} placeholder="https://…/logo.png" /></div>
+          <div>
+            <Label>Dashboard banner photo (optional)</Label>
+            <ImageUploadField value={f.bannerUrl ?? ""} onChange={(url) => setF({ ...f, bannerUrl: url })} placeholder="https://…/school-photo.jpg" />
+            <p className="text-xs text-muted-foreground mt-1">Shown on everyone's dashboard landing page when set.</p>
+          </div>
           <div className="grid grid-cols-3 gap-3">
             <div><Label>Head teacher</Label><Input value={f.headTeacher ?? ""} onChange={(e) => setF({ ...f, headTeacher: e.target.value })} /></div>
             <div><Label>Deputy head</Label><Input value={f.deputyHead ?? ""} onChange={(e) => setF({ ...f, deputyHead: e.target.value })} /></div>
