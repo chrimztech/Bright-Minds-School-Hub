@@ -15,6 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Trash2, UserPlus, Eye, EyeOff, KeyRound, Plus, ShieldCheck, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/EmptyState";
+import { useAuth, hasPermission } from "@/lib/auth";
 
 const SYSTEM_ROLES = [
   "SUPER_ADMIN","HEAD_TEACHER","DEPUTY_HEAD","ADMIN",
@@ -53,6 +54,8 @@ function UsersPage() {
 
 function UsersTab() {
   const qc = useQueryClient();
+  const { permissions } = useAuth();
+  const canManage = hasPermission(permissions, "users:manage");
   const [open, setOpen] = useState(false);
   const [showPw, setShowPw] = useState(false);
   const [form, setForm] = useState({ fullName: "", email: "", password: "", role: "TEACHER" });
@@ -106,6 +109,7 @@ function UsersTab() {
 
   return (
     <div className="space-y-4 pt-4">
+      {canManage && (
       <div className="flex justify-end">
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild><Button><UserPlus className="h-4 w-4 mr-1" /> New user</Button></DialogTrigger>
@@ -140,6 +144,7 @@ function UsersTab() {
           </DialogContent>
         </Dialog>
       </div>
+      )}
 
       <div className="rounded-lg border bg-card">
         <Table>
@@ -168,26 +173,34 @@ function UsersTab() {
                       : u.roles.map((r) => (
                         <Badge key={r} variant="secondary" className="gap-1">
                           {displayRole(r)}
-                          <button onClick={() => removeRole.mutate({ id: u.id, role: r, currentRoles: u.roles })} className="hover:text-destructive ml-1">
-                            <Trash2 className="h-3 w-3" />
-                          </button>
+                          {canManage && (
+                            <button onClick={() => removeRole.mutate({ id: u.id, role: r, currentRoles: u.roles })} className="hover:text-destructive ml-1">
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          )}
                         </Badge>
                       ))}
                   </div>
                 </TableCell>
                 <TableCell>
-                  <Select onValueChange={(v) => addRole.mutate({ id: u.id, role: v, currentRoles: u.roles })}>
-                    <SelectTrigger className="h-8 w-44"><SelectValue placeholder="Assign role…" /></SelectTrigger>
-                    <SelectContent>{allRoles.filter((r) => !u.roles.includes(r)).map((r) => <SelectItem key={r} value={r}>{displayRole(r)}</SelectItem>)}</SelectContent>
-                  </Select>
+                  {canManage && (
+                    <Select onValueChange={(v) => addRole.mutate({ id: u.id, role: v, currentRoles: u.roles })}>
+                      <SelectTrigger className="h-8 w-44"><SelectValue placeholder="Assign role…" /></SelectTrigger>
+                      <SelectContent>{allRoles.filter((r) => !u.roles.includes(r)).map((r) => <SelectItem key={r} value={r}>{displayRole(r)}</SelectItem>)}</SelectContent>
+                    </Select>
+                  )}
                 </TableCell>
                 <TableCell className="text-right flex gap-1 justify-end">
-                  <Button size="icon" variant="ghost" onClick={() => { setResetting({ id: u.id, email: u.email }); setResetPw(""); }} title="Reset password">
-                    <KeyRound className="h-4 w-4" />
-                  </Button>
-                  <Button size="icon" variant="ghost" onClick={() => { if (confirm(`Delete ${u.email}? This cannot be undone.`)) deleteUser.mutate(u.id); }}>
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
+                  {canManage && (
+                    <>
+                      <Button size="icon" variant="ghost" onClick={() => { setResetting({ id: u.id, email: u.email }); setResetPw(""); }} title="Reset password">
+                        <KeyRound className="h-4 w-4" />
+                      </Button>
+                      <Button size="icon" variant="ghost" onClick={() => { if (confirm(`Delete ${u.email}? This cannot be undone.`)) deleteUser.mutate(u.id); }}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
@@ -223,6 +236,8 @@ function UsersTab() {
 
 function RolesTab() {
   const qc = useQueryClient();
+  const { permissions: myPermissions } = useAuth();
+  const canManage = hasPermission(myPermissions, "roles:manage");
   const [selectedRole, setSelectedRole] = useState<SystemRole | null>(null);
   const [newRoleName, setNewRoleName] = useState("");
   const [newRoleDesc, setNewRoleDesc] = useState("");
@@ -299,7 +314,7 @@ function RolesTab() {
                 </div>
                 <div className="flex items-center gap-2">
                   {r.isSystem && <Badge variant="outline" className="text-[10px] py-0">System</Badge>}
-                  {!r.isSystem && (
+                  {!r.isSystem && canManage && (
                     <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); if (confirm(`Delete role "${r.name}"?`)) deleteRole.mutate(r.id); }}>
                       <Trash2 className="h-3.5 w-3.5 text-destructive" />
                     </Button>
@@ -308,14 +323,16 @@ function RolesTab() {
               </div>
             ))}
           </div>
-          <div className="p-3 border-t space-y-2">
-            <p className="text-xs font-medium text-muted-foreground">Create custom role</p>
-            <Input placeholder="Role name (e.g. LIBRARIAN_SENIOR)" value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} className="h-8 text-sm" />
-            <Input placeholder="Description (optional)" value={newRoleDesc} onChange={(e) => setNewRoleDesc(e.target.value)} className="h-8 text-sm" />
-            <Button size="sm" className="w-full" disabled={!newRoleName || createRole.isPending} onClick={() => createRole.mutate()}>
-              <Plus className="h-3.5 w-3.5 mr-1" /> Create role
-            </Button>
-          </div>
+          {canManage && (
+            <div className="p-3 border-t space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Create custom role</p>
+              <Input placeholder="Role name (e.g. LIBRARIAN_SENIOR)" value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} className="h-8 text-sm" />
+              <Input placeholder="Description (optional)" value={newRoleDesc} onChange={(e) => setNewRoleDesc(e.target.value)} className="h-8 text-sm" />
+              <Button size="sm" className="w-full" disabled={!newRoleName || createRole.isPending} onClick={() => createRole.mutate()}>
+                <Plus className="h-3.5 w-3.5 mr-1" /> Create role
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -336,7 +353,7 @@ function RolesTab() {
                       <Checkbox
                         checked={rolePerms.has(p.id)}
                         onCheckedChange={() => togglePerm(p.id)}
-                        disabled={setRolePerms.isPending}
+                        disabled={!canManage || setRolePerms.isPending}
                         className="mt-0.5"
                       />
                       <div>
@@ -373,30 +390,34 @@ function RolesTab() {
                       <p className="text-xs font-mono">{p.name}</p>
                       {p.description && <p className="text-[11px] text-muted-foreground">{p.description}</p>}
                     </div>
-                    <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0"
-                      onClick={() => { if (confirm(`Delete permission "${p.name}"?`)) deletePermission.mutate(p.id); }}>
-                      <Trash2 className="h-3 w-3 text-destructive" />
-                    </Button>
+                    {canManage && (
+                      <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0"
+                        onClick={() => { if (confirm(`Delete permission "${p.name}"?`)) deletePermission.mutate(p.id); }}>
+                        <Trash2 className="h-3 w-3 text-destructive" />
+                      </Button>
+                    )}
                   </div>
                 ))}
               </div>
             ))}
           </div>
-          <div className="p-3 border-t space-y-2">
-            <p className="text-xs font-medium text-muted-foreground">Add custom permission</p>
-            <Input placeholder="module:action (e.g. canteen:manage)" value={newPermName} onChange={(e) => setNewPermName(e.target.value)} className="h-8 text-sm font-mono" />
-            <Input placeholder="Description" value={newPermDesc} onChange={(e) => setNewPermDesc(e.target.value)} className="h-8 text-sm" />
-            <Select value={newPermModule} onValueChange={setNewPermModule}>
-              <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {[...permModules, "GENERAL"].filter((v, i, a) => a.indexOf(v) === i).sort().map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-                <SelectItem value="CUSTOM">CUSTOM</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button size="sm" className="w-full" disabled={!newPermName || createPermission.isPending} onClick={() => createPermission.mutate()}>
-              <Plus className="h-3.5 w-3.5 mr-1" /> Add permission
-            </Button>
-          </div>
+          {canManage && (
+            <div className="p-3 border-t space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Add custom permission</p>
+              <Input placeholder="module:action (e.g. canteen:manage)" value={newPermName} onChange={(e) => setNewPermName(e.target.value)} className="h-8 text-sm font-mono" />
+              <Input placeholder="Description" value={newPermDesc} onChange={(e) => setNewPermDesc(e.target.value)} className="h-8 text-sm" />
+              <Select value={newPermModule} onValueChange={setNewPermModule}>
+                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[...permModules, "GENERAL"].filter((v, i, a) => a.indexOf(v) === i).sort().map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                  <SelectItem value="CUSTOM">CUSTOM</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button size="sm" className="w-full" disabled={!newPermName || createPermission.isPending} onClick={() => createPermission.mutate()}>
+                <Plus className="h-3.5 w-3.5 mr-1" /> Add permission
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -16,6 +16,7 @@ import { Plus, Trash2, PackageCheck, X } from "lucide-react";
 import { toast } from "sonner";
 import { money } from "@/lib/format";
 import { EmptyState } from "@/components/EmptyState";
+import { useAuth, hasPermission } from "@/lib/auth";
 
 // RECEIVED is intentionally excluded — it's only reachable via the dedicated "Receive"
 // action, which is what actually credits inventory stock (see ProcurementController).
@@ -43,6 +44,8 @@ function ProcurementPage() {
 
 function Suppliers() {
   const qc = useQueryClient();
+  const { permissions } = useAuth();
+  const canManage = hasPermission(permissions, "procurement:manage");
   const [open, setOpen] = useState(false);
   const { data = [] } = useQuery({ queryKey: ["sups"], queryFn: () => api.procurement.suppliers.list() });
   const create = useMutation({
@@ -58,30 +61,32 @@ function Suppliers() {
   const [f, setF] = useState({ name: "", contactPerson: "", phone: "", email: "", address: "", taxNo: "", notes: "" });
   return (
     <div className="space-y-3 mt-4">
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Add supplier</Button></DialogTrigger>
-        <DialogContent><DialogHeader><DialogTitle>New supplier</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div><Label>Name</Label><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Contact</Label><Input value={f.contactPerson} onChange={(e) => setF({ ...f, contactPerson: e.target.value })} /></div>
-              <div><Label>Phone</Label><Input value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></div>
+      {canManage && (
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Add supplier</Button></DialogTrigger>
+          <DialogContent><DialogHeader><DialogTitle>New supplier</DialogTitle></DialogHeader>
+            <div className="space-y-3">
+              <div><Label>Name</Label><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Contact</Label><Input value={f.contactPerson} onChange={(e) => setF({ ...f, contactPerson: e.target.value })} /></div>
+                <div><Label>Phone</Label><Input value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></div>
+              </div>
+              <div><Label>Email</Label><Input value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Tax no. (TPIN)</Label><Input value={f.taxNo} onChange={(e) => setF({ ...f, taxNo: e.target.value })} /></div>
+                <div><Label>Address</Label><Input value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} /></div>
+              </div>
+              <div><Label>Notes</Label><Textarea value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></div>
             </div>
-            <div><Label>Email</Label><Input value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Tax no. (TPIN)</Label><Input value={f.taxNo} onChange={(e) => setF({ ...f, taxNo: e.target.value })} /></div>
-              <div><Label>Address</Label><Input value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} /></div>
-            </div>
-            <div><Label>Notes</Label><Textarea value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></div>
-          </div>
-          <DialogFooter><Button onClick={() => create.mutate(f)} disabled={!f.name}>Save</Button></DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter><Button onClick={() => create.mutate(f)} disabled={!f.name}>Save</Button></DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
       <div className="rounded-lg border bg-card"><Table>
         <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Contact</TableHead><TableHead>Phone</TableHead><TableHead>Email</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
           {data.length === 0 ? <TableRow><TableCell colSpan={5}><EmptyState /></TableCell></TableRow> : data.map((s) => (
-            <TableRow key={s.id}><TableCell className="font-medium">{s.name}</TableCell><TableCell>{s.contactPerson ?? "—"}</TableCell><TableCell>{s.phone ?? "—"}</TableCell><TableCell>{s.email ?? "—"}</TableCell><TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => { if (confirm(`Delete ${s.name}?`)) remove.mutate(s.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button></TableCell></TableRow>
+            <TableRow key={s.id}><TableCell className="font-medium">{s.name}</TableCell><TableCell>{s.contactPerson ?? "—"}</TableCell><TableCell>{s.phone ?? "—"}</TableCell><TableCell>{s.email ?? "—"}</TableCell><TableCell className="text-right">{canManage && <Button variant="ghost" size="icon" onClick={() => { if (confirm(`Delete ${s.name}?`)) remove.mutate(s.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>}</TableCell></TableRow>
           ))}
         </TableBody>
       </Table></div>
@@ -91,9 +96,12 @@ function Suppliers() {
 
 function POs() {
   const qc = useQueryClient();
+  const { permissions } = useAuth();
+  const canManage = hasPermission(permissions, "procurement:manage");
   const [open, setOpen] = useState(false);
-  const { data: sups = [] } = useQuery({ queryKey: ["sups-min"], queryFn: () => api.procurement.suppliers.list() });
-  const { data: invItems = [] } = useQuery({ queryKey: ["inventory-min"], queryFn: () => api.inventory.items.list() });
+  // Only feed the New-PO dialog, which never renders without procurement:manage.
+  const { data: sups = [] } = useQuery({ queryKey: ["sups-min"], enabled: canManage, queryFn: () => api.procurement.suppliers.list() });
+  const { data: invItems = [] } = useQuery({ queryKey: ["inventory-min"], enabled: canManage, queryFn: () => api.inventory.items.list() });
   const { data = [] } = useQuery({ queryKey: ["pos"], queryFn: () => api.procurement.orders.list() });
   const create = useMutation({
     mutationFn: (f: any) => api.procurement.orders.create(f),
@@ -134,6 +142,7 @@ function POs() {
 
   return (
     <div className="space-y-3 mt-4">
+      {canManage && (
       <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) setF({ supplierId: "", orderDate: new Date().toISOString().slice(0,10), total: 0, notes: "", items: [] }); }}>
         <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> New PO</Button></DialogTrigger>
         <DialogContent className="max-w-lg">
@@ -177,6 +186,7 @@ function POs() {
           <DialogFooter><Button onClick={() => create.mutate(f)} disabled={!f.supplierId || f.items.some((it: any) => !it.itemId || !it.quantity)}>Save</Button></DialogFooter>
         </DialogContent>
       </Dialog>
+      )}
       <div className="rounded-lg border bg-card"><Table>
         <TableHeader><TableRow><TableHead>PO no</TableHead><TableHead>Supplier</TableHead><TableHead>Date</TableHead><TableHead className="text-right">Total</TableHead><TableHead>Status</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
@@ -189,20 +199,20 @@ function POs() {
               <TableCell>
                 {p.receivedAt ? (
                   <Badge>Received</Badge>
-                ) : (
+                ) : canManage ? (
                   <Select value={p.status} onValueChange={(v) => setStatus.mutate({ id: p.id, status: v })}>
                     <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
                     <SelectContent>{PO_STATUSES.map((s) => <SelectItem key={s} value={s}>{s.toLowerCase()}</SelectItem>)}</SelectContent>
                   </Select>
-                )}
+                ) : <Badge variant="secondary">{p.status.toLowerCase()}</Badge>}
               </TableCell>
               <TableCell className="text-right whitespace-nowrap">
-                {!p.receivedAt && p.status !== "CANCELLED" && (
+                {canManage && !p.receivedAt && p.status !== "CANCELLED" && (
                   <Button size="sm" variant="secondary" onClick={() => receive.mutate(p.id)} disabled={receive.isPending} title="Credit ordered quantities to inventory stock">
                     <PackageCheck className="h-3.5 w-3.5 mr-1" /> Receive
                   </Button>
                 )}
-                <Button variant="ghost" size="icon" onClick={() => { if (confirm(`Delete ${p.poNo}?`)) removePo.mutate(p.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                {canManage && <Button variant="ghost" size="icon" onClick={() => { if (confirm(`Delete ${p.poNo}?`)) removePo.mutate(p.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>}
               </TableCell>
             </TableRow>
           ))}

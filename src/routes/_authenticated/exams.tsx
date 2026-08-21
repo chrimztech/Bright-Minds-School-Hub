@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth, hasPermission } from "@/lib/auth";
 
 const ASSESSMENT_LABELS: Record<string, string> = {
   MID_TERM: "Mid Term",
@@ -28,6 +29,8 @@ export const Route = createFileRoute("/_authenticated/exams")({
 
 function Exams() {
   const qc = useQueryClient();
+  const { permissions } = useAuth();
+  const canManage = hasPermission(permissions, "exams:manage");
   const [open, setOpen] = useState(false);
   const [termFilter, setTermFilter] = useState("");
   const [f, setF] = useState({ name: "", termId: "", assessmentType: "" as AssessmentType | "", examDate: "", outOf: 100, weight: 1 });
@@ -70,6 +73,7 @@ function Exams() {
   return (
     <>
       <PageHeader title="Exams & assessments" actions={
+        canManage ? (
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Add exam</Button></DialogTrigger>
           <DialogContent>
@@ -113,6 +117,7 @@ function Exams() {
             <DialogFooter><Button onClick={() => create.mutate()} disabled={!f.name}>Save</Button></DialogFooter>
           </DialogContent>
         </Dialog>
+        ) : undefined
       } />
       <div className="p-6 space-y-4">
         {/* Term filter */}
@@ -164,9 +169,11 @@ function Exams() {
                     <TableCell>{e.examDate ?? "—"}</TableCell>
                     <TableCell>{e.outOf}</TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" onClick={() => { if (confirm(`Delete ${e.name}?`)) remove.mutate(e.id); }}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                      {canManage && (
+                        <Button variant="ghost" size="icon" onClick={() => { if (confirm(`Delete ${e.name}?`)) remove.mutate(e.id); }}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

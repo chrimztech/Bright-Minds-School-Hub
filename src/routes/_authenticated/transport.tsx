@@ -14,6 +14,7 @@ import { Plus, Bus, Route as RouteIcon, Trash2, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { money } from "@/lib/format";
 import { EmptyState } from "@/components/EmptyState";
+import { useAuth, hasPermission } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/transport")({
   head: () => ({ meta: [{ title: "Transport" }] }),
@@ -42,6 +43,8 @@ function TransportPage() {
 
 function Vehicles() {
   const qc = useQueryClient();
+  const { permissions } = useAuth();
+  const canManage = hasPermission(permissions, "transport:manage");
   const [open, setOpen] = useState(false);
   const { data = [] } = useQuery({ queryKey: ["vehicles"], queryFn: () => api.transport.vehicles.list() });
   const create = useMutation({
@@ -56,12 +59,14 @@ function Vehicles() {
   });
   return (
     <div className="space-y-3 mt-4">
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Add vehicle</Button></DialogTrigger>
-        <DialogContent><DialogHeader><DialogTitle>New vehicle</DialogTitle></DialogHeader>
-          <VehicleFields onSubmit={(f: any) => create.mutate(f)} />
-        </DialogContent>
-      </Dialog>
+      {canManage && (
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Add vehicle</Button></DialogTrigger>
+          <DialogContent><DialogHeader><DialogTitle>New vehicle</DialogTitle></DialogHeader>
+            <VehicleFields onSubmit={(f: any) => create.mutate(f)} />
+          </DialogContent>
+        </Dialog>
+      )}
       <div className="rounded-lg border bg-card"><Table>
         <TableHeader><TableRow><TableHead>Reg</TableHead><TableHead>Model</TableHead><TableHead>Capacity</TableHead><TableHead>Driver</TableHead><TableHead>Phone</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
@@ -72,7 +77,7 @@ function Vehicles() {
               <TableCell>{v.capacity ?? "—"}</TableCell>
               <TableCell>{v.driverName ?? "—"}</TableCell>
               <TableCell>{v.driverPhone ?? "—"}</TableCell>
-              <TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => { if (confirm(`Delete ${v.regNo}?`)) remove.mutate(v.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button></TableCell>
+              <TableCell className="text-right">{canManage && <Button variant="ghost" size="icon" onClick={() => { if (confirm(`Delete ${v.regNo}?`)) remove.mutate(v.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>}</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -101,10 +106,13 @@ function VehicleFields({ onSubmit }: any) {
 
 function Routes() {
   const qc = useQueryClient();
+  const { permissions } = useAuth();
+  const canManage = hasPermission(permissions, "transport:manage");
   const [open, setOpen] = useState(false);
   const [pointsFor, setPointsFor] = useState<any | null>(null);
   const { data = [] } = useQuery({ queryKey: ["routes"], queryFn: () => api.transport.routes.list() });
-  const { data: vehicles = [] } = useQuery({ queryKey: ["vehicles-min"], queryFn: () => api.transport.vehicles.list() });
+  // Only feeds the New-route dialog's vehicle picker, gated by transport:manage.
+  const { data: vehicles = [] } = useQuery({ queryKey: ["vehicles-min"], enabled: canManage, queryFn: () => api.transport.vehicles.list() });
   const create = useMutation({
     mutationFn: (f: any) => api.transport.routes.create(f),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["routes"] }); toast.success("Route added"); setOpen(false); },
@@ -117,12 +125,14 @@ function Routes() {
   });
   return (
     <div className="space-y-3 mt-4">
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Add route</Button></DialogTrigger>
-        <DialogContent><DialogHeader><DialogTitle>New route</DialogTitle></DialogHeader>
-          <RouteFields vehicles={vehicles} onSubmit={(f: any) => create.mutate(f)} />
-        </DialogContent>
-      </Dialog>
+      {canManage && (
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Add route</Button></DialogTrigger>
+          <DialogContent><DialogHeader><DialogTitle>New route</DialogTitle></DialogHeader>
+            <RouteFields vehicles={vehicles} onSubmit={(f: any) => create.mutate(f)} />
+          </DialogContent>
+        </Dialog>
+      )}
       <div className="rounded-lg border bg-card"><Table>
         <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Pickup points</TableHead><TableHead>Vehicle</TableHead><TableHead className="text-right">Base fee</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
@@ -133,8 +143,8 @@ function Routes() {
               <TableCell>{r.vehicle?.regNo ?? "—"}</TableCell>
               <TableCell className="text-right">{money(r.fee ?? 0)}</TableCell>
               <TableCell className="text-right whitespace-nowrap">
-                <Button variant="ghost" size="sm" onClick={() => setPointsFor(r)} title="Manage priced pickup points"><MapPin className="h-4 w-4 mr-1" /> Pickup points</Button>
-                <Button variant="ghost" size="icon" onClick={() => { if (confirm(`Delete ${r.name}?`)) remove.mutate(r.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                {canManage && <Button variant="ghost" size="sm" onClick={() => setPointsFor(r)} title="Manage priced pickup points"><MapPin className="h-4 w-4 mr-1" /> Pickup points</Button>}
+                {canManage && <Button variant="ghost" size="icon" onClick={() => { if (confirm(`Delete ${r.name}?`)) remove.mutate(r.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>}
               </TableCell>
             </TableRow>
           ))}
@@ -215,10 +225,13 @@ function RoutePointsDialog({ route }: { route: any }) {
 
 function Assignments() {
   const qc = useQueryClient();
+  const { permissions } = useAuth();
+  const canManage = hasPermission(permissions, "transport:manage");
   const [open, setOpen] = useState(false);
   const { data = [] } = useQuery({ queryKey: ["tx-assign"], queryFn: () => api.transport.assignments.list() });
-  const { data: pupils = [] } = useQuery({ queryKey: ["pupils-min"], queryFn: () => api.pupils.all() });
-  const { data: routes = [] } = useQuery({ queryKey: ["routes-min"], queryFn: () => api.transport.routes.list() });
+  // Only feed the Assign-pupil dialog, which never renders without transport:manage.
+  const { data: pupils = [] } = useQuery({ queryKey: ["pupils-min"], enabled: canManage, queryFn: () => api.pupils.all() });
+  const { data: routes = [] } = useQuery({ queryKey: ["routes-min"], enabled: canManage, queryFn: () => api.transport.routes.list() });
   const create = useMutation({
     mutationFn: (f: any) => api.transport.assignments.create(f),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["tx-assign"] }); toast.success("Assigned"); setOpen(false); },
@@ -238,6 +251,7 @@ function Assignments() {
   const selectedRoute = routes.find((r) => r.id === f.routeId);
   return (
     <div className="space-y-3 mt-4">
+      {canManage && (
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Assign pupil</Button></DialogTrigger>
         <DialogContent><DialogHeader><DialogTitle>Assign pupil to route</DialogTitle></DialogHeader>
@@ -270,6 +284,7 @@ function Assignments() {
           <DialogFooter><Button onClick={() => create.mutate(f)} disabled={!f.pupilId || !f.routeId}>Save</Button></DialogFooter>
         </DialogContent>
       </Dialog>
+      )}
       <div className="rounded-lg border bg-card"><Table>
         <TableHeader><TableRow><TableHead>Pupil</TableHead><TableHead>Route</TableHead><TableHead>Pickup</TableHead><TableHead className="text-right">Fee</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
@@ -279,7 +294,7 @@ function Assignments() {
               <TableCell>{a.route?.name}</TableCell>
               <TableCell>{a.pickupPointRef?.name ?? a.pickupPoint ?? "—"}</TableCell>
               <TableCell className="text-right">{money(a.pickupPointRef?.fee ?? a.route?.fee ?? 0)}</TableCell>
-              <TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => { if (confirm("Remove assignment?")) remove.mutate(a.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button></TableCell>
+              <TableCell className="text-right">{canManage && <Button variant="ghost" size="icon" onClick={() => { if (confirm("Remove assignment?")) remove.mutate(a.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>}</TableCell>
             </TableRow>
           ))}
         </TableBody>

@@ -17,6 +17,7 @@ import { ImageUploadField } from "@/components/ImageUploadField";
 import { Plus, Pencil, Trash2, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { money } from "@/lib/format";
+import { useAuth, hasPermission } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/staff")({
   head: () => ({ meta: [{ title: "Staff" }] }),
@@ -31,6 +32,8 @@ const ROLE_CATEGORIES = [
 
 function Staff() {
   const qc = useQueryClient();
+  const { permissions } = useAuth();
+  const canManage = hasPermission(permissions, "staff:manage");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Staff | null>(null);
   const [accountFor, setAccountFor] = useState<Staff | null>(null);
@@ -56,10 +59,12 @@ function Staff() {
   return (
     <>
       <PageHeader title="Teachers & staff" actions={
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Add staff</Button></DialogTrigger>
-          <StaffForm onSubmit={(f: any) => create.mutate(f)} />
-        </Dialog>
+        canManage ? (
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Add staff</Button></DialogTrigger>
+            <StaffForm onSubmit={(f: any) => create.mutate(f)} />
+          </Dialog>
+        ) : undefined
       } />
       <div className="p-6">
         <div className="rounded-lg border bg-card">
@@ -84,11 +89,15 @@ function Staff() {
                     </TableCell>
                     <TableCell><Badge variant={s.status === "ACTIVE" ? "default" : "secondary"}>{s.status}</Badge></TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" disabled={!s.email} onClick={() => setAccountFor(s)}>
-                        <KeyRound className="h-4 w-4 mr-1" /> {s.userId ? "Reset login" : "Create login"}
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => setEditing(s)}><Pencil className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="sm" onClick={() => { if (confirm(`Delete staff "${s.fullName}"?`)) remove.mutate(s.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                      {canManage && (
+                        <>
+                          <Button variant="ghost" size="sm" disabled={!s.email} onClick={() => setAccountFor(s)}>
+                            <KeyRound className="h-4 w-4 mr-1" /> {s.userId ? "Reset login" : "Create login"}
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => setEditing(s)}><Pencil className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="sm" onClick={() => { if (confirm(`Delete staff "${s.fullName}"?`)) remove.mutate(s.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                        </>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

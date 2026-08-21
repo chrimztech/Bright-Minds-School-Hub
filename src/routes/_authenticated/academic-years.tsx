@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth, hasPermission } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/academic-years")({
   head: () => ({ meta: [{ title: "Academic Years" }] }),
@@ -25,6 +26,8 @@ function fmt(d?: string) {
 
 function AcademicYearsPage() {
   const qc = useQueryClient();
+  const { permissions } = useAuth();
+  const canManage = hasPermission(permissions, "academic_years:manage");
   const [yearOpen, setYearOpen] = useState(false);
   const [termOpen, setTermOpen] = useState(false);
 
@@ -66,10 +69,12 @@ function AcademicYearsPage() {
         <section className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold">Academic years</h2>
-            <Dialog open={yearOpen} onOpenChange={setYearOpen}>
-              <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4 mr-1" /> Add year</Button></DialogTrigger>
-              <YearForm onSubmit={(f: any) => createYear.mutate(f)} />
-            </Dialog>
+            {canManage && (
+              <Dialog open={yearOpen} onOpenChange={setYearOpen}>
+                <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4 mr-1" /> Add year</Button></DialogTrigger>
+                <YearForm onSubmit={(f: any) => createYear.mutate(f)} />
+              </Dialog>
+            )}
           </div>
           <div className="rounded-lg border bg-card">
             <Table>
@@ -87,9 +92,11 @@ function AcademicYearsPage() {
                       <TableCell>{fmt(y.endDate)}</TableCell>
                       <TableCell>{y.isCurrent && <Badge>Current</Badge>}</TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" onClick={() => { if (confirm(`Delete academic year "${y.name}"? This also removes its terms.`)) deleteYear.mutate(y.id); }}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        {canManage && (
+                          <Button variant="ghost" size="sm" onClick={() => { if (confirm(`Delete academic year "${y.name}"? This also removes its terms.`)) deleteYear.mutate(y.id); }}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))
@@ -102,10 +109,12 @@ function AcademicYearsPage() {
         <section className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold">Terms</h2>
-            <Dialog open={termOpen} onOpenChange={setTermOpen}>
-              <DialogTrigger asChild><Button size="sm" disabled={years.length === 0}><Plus className="h-4 w-4 mr-1" /> Add term</Button></DialogTrigger>
-              <TermForm years={years} onSubmit={(f: any) => createTerm.mutate(f)} />
-            </Dialog>
+            {canManage && (
+              <Dialog open={termOpen} onOpenChange={setTermOpen}>
+                <DialogTrigger asChild><Button size="sm" disabled={years.length === 0}><Plus className="h-4 w-4 mr-1" /> Add term</Button></DialogTrigger>
+                <TermForm years={years} onSubmit={(f: any) => createTerm.mutate(f)} />
+              </Dialog>
+            )}
           </div>
           <div className="rounded-lg border bg-card">
             <Table>
@@ -124,9 +133,11 @@ function AcademicYearsPage() {
                       <TableCell>{fmt(t.endDate)}</TableCell>
                       <TableCell>{t.isCurrent && <Badge>Current</Badge>}</TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" onClick={() => { if (confirm(`Delete term "${t.name}"?`)) deleteTerm.mutate(t.id); }}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        {canManage && (
+                          <Button variant="ghost" size="sm" onClick={() => { if (confirm(`Delete term "${t.name}"?`)) deleteTerm.mutate(t.id); }}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))

@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/EmptyState";
+import { useAuth, hasPermission } from "@/lib/auth";
 
 const KINDS = ["INCIDENT", "MERIT", "DEMERIT", "REWARD", "WARNING"];
 
@@ -24,8 +25,13 @@ export const Route = createFileRoute("/_authenticated/discipline")({
 
 function DisciplinePage() {
   const qc = useQueryClient();
+  const { permissions } = useAuth();
+  const canManage = hasPermission(permissions, "discipline:manage");
   const [open, setOpen] = useState(false);
-  const { data: pupils = [] } = useQuery({ queryKey: ["pupils-min"], queryFn: () => api.pupils.all() });
+  // Only needed for the New-record dialog's pupil picker, which never renders without
+  // discipline:manage — fetching it unconditionally 403'd (and console-errored) for every
+  // view-only user on every page load, even though the dialog was already correctly hidden.
+  const { data: pupils = [] } = useQuery({ queryKey: ["pupils-min"], enabled: canManage, queryFn: () => api.pupils.all() });
   const { data = [] } = useQuery({ queryKey: ["discipline"], queryFn: () => api.discipline.list() });
   const create = useMutation({
     mutationFn: (f: any) => api.discipline.create(f),
@@ -41,10 +47,12 @@ function DisciplinePage() {
     <>
       <PageHeader title="Discipline & behaviour" description="Incidents, merits, rewards and follow-ups"
         actions={
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> New record</Button></DialogTrigger>
-            <DiscForm pupils={pupils} onSubmit={(f: any) => create.mutate(f)} />
-          </Dialog>
+          canManage ? (
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> New record</Button></DialogTrigger>
+              <DiscForm pupils={pupils} onSubmit={(f: any) => create.mutate(f)} />
+            </Dialog>
+          ) : undefined
         } />
       <div className="p-6"><div className="rounded-lg border bg-card"><Table>
         <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Pupil</TableHead><TableHead>Kind</TableHead><TableHead>Description</TableHead><TableHead>Action</TableHead><TableHead></TableHead></TableRow></TableHeader>
@@ -56,7 +64,7 @@ function DisciplinePage() {
               <TableCell><Badge variant={d.kind === "REWARD" || d.kind === "MERIT" ? "default" : d.kind === "DEMERIT" || d.kind === "INCIDENT" ? "destructive" : "secondary"}>{d.kind.toLowerCase()}</Badge></TableCell>
               <TableCell className="max-w-[260px] truncate">{d.description}</TableCell>
               <TableCell className="max-w-[200px] truncate">{d.actionTaken ?? "—"}</TableCell>
-              <TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => { if (confirm("Delete this record?")) remove.mutate(d.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button></TableCell>
+              <TableCell className="text-right">{canManage && <Button variant="ghost" size="icon" onClick={() => { if (confirm("Delete this record?")) remove.mutate(d.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>}</TableCell>
             </TableRow>
           ))}
         </TableBody>

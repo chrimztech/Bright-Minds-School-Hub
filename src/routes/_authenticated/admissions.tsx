@@ -15,6 +15,7 @@ import { Plus, Trash2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/EmptyState";
 import { money } from "@/lib/format";
+import { useAuth, hasPermission } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/admissions")({
   head: () => ({ meta: [{ title: "Admissions" }] }),
@@ -25,9 +26,12 @@ const STATUSES = ["APPLIED", "REVIEWING", "INTERVIEWED", "ADMITTED", "REJECTED",
 
 function AdmissionsPage() {
   const qc = useQueryClient();
+  const { permissions } = useAuth();
+  const canManage = hasPermission(permissions, "admissions:manage");
   const [open, setOpen] = useState(false);
   const [feeFor, setFeeFor] = useState<any | null>(null);
-  const { data: classes = [] } = useQuery({ queryKey: ["classes-min"], queryFn: () => api.classes.list() });
+  // Only feeds the New-application dialog, which never renders without admissions:manage.
+  const { data: classes = [] } = useQuery({ queryKey: ["classes-min"], enabled: canManage, queryFn: () => api.classes.list() });
   const { data = [] } = useQuery({ queryKey: ["admissions"], queryFn: () => api.admissions.list() });
   const create = useMutation({
     mutationFn: (f: any) => api.admissions.create(f),
@@ -56,10 +60,12 @@ function AdmissionsPage() {
     <>
       <PageHeader title="Admissions" description="Track applicants and convert to pupils"
         actions={
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> New application</Button></DialogTrigger>
-            <ApplicationForm classes={classes} onSubmit={(f: any) => create.mutate(f)} />
-          </Dialog>
+          canManage ? (
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> New application</Button></DialogTrigger>
+              <ApplicationForm classes={classes} onSubmit={(f: any) => create.mutate(f)} />
+            </Dialog>
+          ) : undefined
         } />
       <div className="p-6">
         <div className="rounded-lg border bg-card">
@@ -79,20 +85,22 @@ function AdmissionsPage() {
                     <TableCell>
                       {a.regFeePaid ? (
                         <span className="text-emerald-600 font-medium text-sm">{money(a.regFeePaid)}</span>
-                      ) : (
+                      ) : canManage ? (
                         <Button size="sm" variant="outline" onClick={() => setFeeFor(a)}><Wallet className="h-3.5 w-3.5 mr-1" /> Record fee</Button>
-                      )}
+                      ) : "—"}
                     </TableCell>
                     <TableCell>
-                      <Select value={a.status} onValueChange={(v) => setStatus.mutate({ id: a.id, status: v })}>
-                        <SelectTrigger className="h-8 w-36"><SelectValue /></SelectTrigger>
-                        <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{s.toLowerCase()}</SelectItem>)}</SelectContent>
-                      </Select>
+                      {canManage ? (
+                        <Select value={a.status} onValueChange={(v) => setStatus.mutate({ id: a.id, status: v })}>
+                          <SelectTrigger className="h-8 w-36"><SelectValue /></SelectTrigger>
+                          <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{s.toLowerCase()}</SelectItem>)}</SelectContent>
+                        </Select>
+                      ) : <Badge variant="secondary">{a.status.toLowerCase()}</Badge>}
                     </TableCell>
                     <TableCell className="flex items-center gap-2">
-                      {a.status === "ADMITTED" && !a.pupil && <Button size="sm" variant="secondary" onClick={() => enrol.mutate(a.id)} disabled={enrol.isPending}>Enrol</Button>}
+                      {canManage && a.status === "ADMITTED" && !a.pupil && <Button size="sm" variant="secondary" onClick={() => enrol.mutate(a.id)} disabled={enrol.isPending}>Enrol</Button>}
                       {a.pupil && <Badge>Enrolled</Badge>}
-                      <Button variant="ghost" size="icon" onClick={() => { if (confirm(`Delete application ${a.applicationNo}?`)) remove.mutate(a.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                      {canManage && <Button variant="ghost" size="icon" onClick={() => { if (confirm(`Delete application ${a.applicationNo}?`)) remove.mutate(a.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>}
                     </TableCell>
                   </TableRow>
                 ))}

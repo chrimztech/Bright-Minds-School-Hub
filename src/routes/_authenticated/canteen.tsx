@@ -17,6 +17,7 @@ import { Plus, Trash2, UtensilsCrossed } from "lucide-react";
 import { toast } from "sonner";
 import { money } from "@/lib/format";
 import { EmptyState } from "@/components/EmptyState";
+import { useAuth, hasPermission } from "@/lib/auth";
 
 const CATEGORIES = ["Breakfast", "Lunch", "Snack", "Drink", "Meal", "Other"];
 const METHODS = ["CASH", "MOBILE_MONEY", "ACCOUNT", "CARD"];
@@ -73,6 +74,8 @@ function Summary() {
 
 function Menu() {
   const qc = useQueryClient();
+  const { permissions } = useAuth();
+  const canManage = hasPermission(permissions, "canteen:manage");
   const [open, setOpen] = useState(false);
   const { data = [] } = useQuery({ queryKey: ["canteen-menu"], queryFn: () => api.canteen.menu.list() });
   const create = useMutation({
@@ -92,10 +95,12 @@ function Menu() {
   });
   return (
     <div className="space-y-3 mt-4">
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> New item</Button></DialogTrigger>
-        <MenuForm onSubmit={(f: any) => create.mutate(f)} />
-      </Dialog>
+      {canManage && (
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> New item</Button></DialogTrigger>
+          <MenuForm onSubmit={(f: any) => create.mutate(f)} />
+        </Dialog>
+      )}
       <div className="rounded-lg border bg-card"><Table>
         <TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Category</TableHead><TableHead className="text-right">Price</TableHead><TableHead>Status</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
@@ -105,12 +110,16 @@ function Menu() {
               <TableCell>{r.category}</TableCell>
               <TableCell className="text-right">{money(r.price)}</TableCell>
               <TableCell>
-                <button onClick={() => toggle.mutate(r)}>
+                {canManage ? (
+                  <button onClick={() => toggle.mutate(r)}>
+                    <Badge variant={r.isAvailable ? "default" : "secondary"}>{r.isAvailable ? "Available" : "Off"}</Badge>
+                  </button>
+                ) : (
                   <Badge variant={r.isAvailable ? "default" : "secondary"}>{r.isAvailable ? "Available" : "Off"}</Badge>
-                </button>
+                )}
               </TableCell>
               <TableCell className="text-right">
-                <Button size="icon" variant="ghost" onClick={() => { if (confirm("Delete this item?")) remove.mutate(r.id); }}><Trash2 className="h-4 w-4" /></Button>
+                {canManage && <Button size="icon" variant="ghost" onClick={() => { if (confirm("Delete this item?")) remove.mutate(r.id); }}><Trash2 className="h-4 w-4" /></Button>}
               </TableCell>
             </TableRow>
           ))}
@@ -145,6 +154,8 @@ function MenuForm({ onSubmit }: any) {
 
 function Plans() {
   const qc = useQueryClient();
+  const { permissions } = useAuth();
+  const canManage = hasPermission(permissions, "canteen:manage");
   const [open, setOpen] = useState(false);
   const { data = [] } = useQuery({ queryKey: ["canteen-plans"], queryFn: () => api.canteen.plans.list() });
   const create = useMutation({
@@ -160,21 +171,23 @@ function Plans() {
   const [f, setF] = useState({ name: "", description: "", pricePerTerm: 0, mealsPerDay: 1, isActive: true });
   return (
     <div className="space-y-3 mt-4">
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> New plan</Button></DialogTrigger>
-        <DialogContent>
-          <DialogHeader><DialogTitle>New meal plan</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div><Label>Name</Label><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Termly lunch plan" /></div>
-            <div><Label>Description</Label><Textarea value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Price / term (ZMW)</Label><Input type="number" step="0.01" value={f.pricePerTerm} onChange={(e) => setF({ ...f, pricePerTerm: Number(e.target.value) })} /></div>
-              <div><Label>Meals per day</Label><Input type="number" value={f.mealsPerDay} onChange={(e) => setF({ ...f, mealsPerDay: Number(e.target.value) })} /></div>
+      {canManage && (
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> New plan</Button></DialogTrigger>
+          <DialogContent>
+            <DialogHeader><DialogTitle>New meal plan</DialogTitle></DialogHeader>
+            <div className="space-y-3">
+              <div><Label>Name</Label><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Termly lunch plan" /></div>
+              <div><Label>Description</Label><Textarea value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Price / term (ZMW)</Label><Input type="number" step="0.01" value={f.pricePerTerm} onChange={(e) => setF({ ...f, pricePerTerm: Number(e.target.value) })} /></div>
+                <div><Label>Meals per day</Label><Input type="number" value={f.mealsPerDay} onChange={(e) => setF({ ...f, mealsPerDay: Number(e.target.value) })} /></div>
+              </div>
             </div>
-          </div>
-          <DialogFooter><Button onClick={() => create.mutate(f)} disabled={!f.name}>Save</Button></DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter><Button onClick={() => create.mutate(f)} disabled={!f.name}>Save</Button></DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
       <div className="rounded-lg border bg-card"><Table>
         <TableHeader><TableRow><TableHead>Plan</TableHead><TableHead>Meals/day</TableHead><TableHead className="text-right">Price/term</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
@@ -183,7 +196,7 @@ function Plans() {
               <TableCell><p className="font-medium">{r.name}</p><p className="text-xs text-muted-foreground">{r.description ?? ""}</p></TableCell>
               <TableCell>{r.mealsPerDay}</TableCell>
               <TableCell className="text-right">{money(r.pricePerTerm)}</TableCell>
-              <TableCell className="text-right"><Button size="icon" variant="ghost" onClick={() => { if (confirm("Delete?")) remove.mutate(r.id); }}><Trash2 className="h-4 w-4" /></Button></TableCell>
+              <TableCell className="text-right">{canManage && <Button size="icon" variant="ghost" onClick={() => { if (confirm("Delete?")) remove.mutate(r.id); }}><Trash2 className="h-4 w-4" /></Button>}</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -194,10 +207,13 @@ function Plans() {
 
 function Subs() {
   const qc = useQueryClient();
+  const { permissions } = useAuth();
+  const canManage = hasPermission(permissions, "canteen:manage");
   const [open, setOpen] = useState(false);
   const { data = [] } = useQuery({ queryKey: ["canteen-subs"], queryFn: () => api.canteen.subscriptions.list() });
-  const { data: pupils = [] } = useQuery({ queryKey: ["pupils-mini"], queryFn: () => api.pupils.all() });
-  const { data: plans = [] } = useQuery({ queryKey: ["canteen-plans"], queryFn: () => api.canteen.plans.list() });
+  // Only feed the New-subscription dialog, which never renders without canteen:manage.
+  const { data: pupils = [] } = useQuery({ queryKey: ["pupils-mini"], enabled: canManage, queryFn: () => api.pupils.all() });
+  const { data: plans = [] } = useQuery({ queryKey: ["canteen-plans"], enabled: canManage, queryFn: () => api.canteen.plans.list() });
   const create = useMutation({
     mutationFn: (f: any) => api.canteen.subscriptions.create({ pupilId: f.pupilId, planId: f.planId }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["canteen-subs"] }); toast.success("Subscribed"); setOpen(false); },
@@ -211,28 +227,30 @@ function Subs() {
   const [f, setF] = useState<any>({ pupilId: "", planId: "", startDate: new Date().toISOString().slice(0, 10) });
   return (
     <div className="space-y-3 mt-4">
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Subscribe pupil</Button></DialogTrigger>
-        <DialogContent>
-          <DialogHeader><DialogTitle>New subscription</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div><Label>Pupil</Label>
-              <Select value={f.pupilId} onValueChange={(v) => setF({ ...f, pupilId: v })}>
-                <SelectTrigger><SelectValue placeholder="Choose pupil" /></SelectTrigger>
-                <SelectContent>{pupils.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.fullName}</SelectItem>)}</SelectContent>
-              </Select>
+      {canManage && (
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Subscribe pupil</Button></DialogTrigger>
+          <DialogContent>
+            <DialogHeader><DialogTitle>New subscription</DialogTitle></DialogHeader>
+            <div className="space-y-3">
+              <div><Label>Pupil</Label>
+                <Select value={f.pupilId} onValueChange={(v) => setF({ ...f, pupilId: v })}>
+                  <SelectTrigger><SelectValue placeholder="Choose pupil" /></SelectTrigger>
+                  <SelectContent>{pupils.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.fullName}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div><Label>Plan</Label>
+                <Select value={f.planId} onValueChange={(v) => setF({ ...f, planId: v })}>
+                  <SelectTrigger><SelectValue placeholder="Choose plan" /></SelectTrigger>
+                  <SelectContent>{plans.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div><Label>Start date</Label><Input type="date" value={f.startDate} onChange={(e) => setF({ ...f, startDate: e.target.value })} /></div>
             </div>
-            <div><Label>Plan</Label>
-              <Select value={f.planId} onValueChange={(v) => setF({ ...f, planId: v })}>
-                <SelectTrigger><SelectValue placeholder="Choose plan" /></SelectTrigger>
-                <SelectContent>{plans.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div><Label>Start date</Label><Input type="date" value={f.startDate} onChange={(e) => setF({ ...f, startDate: e.target.value })} /></div>
-          </div>
-          <DialogFooter><Button onClick={() => create.mutate(f)} disabled={!f.pupilId || !f.planId}>Save</Button></DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter><Button onClick={() => create.mutate(f)} disabled={!f.pupilId || !f.planId}>Save</Button></DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
       <div className="rounded-lg border bg-card"><Table>
         <TableHeader><TableRow><TableHead>Pupil</TableHead><TableHead>Plan</TableHead><TableHead>Start</TableHead><TableHead>Status</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
@@ -242,7 +260,7 @@ function Subs() {
               <TableCell>{r.plan?.name ?? "—"} <span className="text-xs text-muted-foreground ml-1">{money(r.plan?.pricePerTerm ?? 0)}</span></TableCell>
               <TableCell>{r.startDate}</TableCell>
               <TableCell><Badge variant={r.status === "ACTIVE" ? "default" : "secondary"}>{r.status}</Badge></TableCell>
-              <TableCell className="text-right">{r.status === "ACTIVE" && <Button size="sm" variant="outline" onClick={() => { if (confirm("Cancel subscription?")) cancel.mutate(r.id); }}>Cancel</Button>}</TableCell>
+              <TableCell className="text-right">{canManage && r.status === "ACTIVE" && <Button size="sm" variant="outline" onClick={() => { if (confirm("Cancel subscription?")) cancel.mutate(r.id); }}>Cancel</Button>}</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -253,10 +271,13 @@ function Subs() {
 
 function Sales() {
   const qc = useQueryClient();
+  const { permissions } = useAuth();
+  const canManage = hasPermission(permissions, "canteen:manage");
   const [open, setOpen] = useState(false);
   const { data = [] } = useQuery({ queryKey: ["canteen-sales"], queryFn: () => api.canteen.sales.list() });
-  const { data: items = [] } = useQuery({ queryKey: ["canteen-menu-avail"], queryFn: () => api.canteen.menu.list() });
-  const { data: pupils = [] } = useQuery({ queryKey: ["pupils-mini"], queryFn: () => api.pupils.all() });
+  // Only feed the Record-sale dialog, which never renders without canteen:manage.
+  const { data: items = [] } = useQuery({ queryKey: ["canteen-menu-avail"], enabled: canManage, queryFn: () => api.canteen.menu.list() });
+  const { data: pupils = [] } = useQuery({ queryKey: ["pupils-mini"], enabled: canManage, queryFn: () => api.pupils.all() });
 
   const create = useMutation({
     mutationFn: (f: any) => {
@@ -288,6 +309,7 @@ function Sales() {
 
   return (
     <div className="space-y-3 mt-4">
+      {canManage && (
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild><Button><UtensilsCrossed className="h-4 w-4 mr-1" /> Record sale</Button></DialogTrigger>
         <DialogContent>
@@ -329,6 +351,7 @@ function Sales() {
           <DialogFooter><Button onClick={() => create.mutate(f)} disabled={!f.itemId || !f.quantity || !f.pupilId}>Save</Button></DialogFooter>
         </DialogContent>
       </Dialog>
+      )}
       <div className="rounded-lg border bg-card"><Table>
         <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Item</TableHead><TableHead>Pupil</TableHead><TableHead>Class</TableHead><TableHead>Qty</TableHead><TableHead>Method</TableHead><TableHead className="text-right">Total</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
@@ -341,7 +364,7 @@ function Sales() {
               <TableCell>{r.quantity}</TableCell>
               <TableCell>{r.paymentMethod}</TableCell>
               <TableCell className="text-right text-emerald-600">{money(r.total)}</TableCell>
-              <TableCell className="text-right"><Button size="icon" variant="ghost" onClick={() => { if (confirm("Delete?")) remove.mutate(r.id); }}><Trash2 className="h-4 w-4" /></Button></TableCell>
+              <TableCell className="text-right">{canManage && <Button size="icon" variant="ghost" onClick={() => { if (confirm("Delete?")) remove.mutate(r.id); }}><Trash2 className="h-4 w-4" /></Button>}</TableCell>
             </TableRow>
           ))}
         </TableBody>

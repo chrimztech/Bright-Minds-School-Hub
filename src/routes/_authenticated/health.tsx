@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/EmptyState";
+import { useAuth, hasPermission } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/health")({
   head: () => ({ meta: [{ title: "Health records" }] }),
@@ -21,8 +22,11 @@ export const Route = createFileRoute("/_authenticated/health")({
 
 function HealthPage() {
   const qc = useQueryClient();
+  const { permissions } = useAuth();
+  const canManage = hasPermission(permissions, "health:manage");
   const [open, setOpen] = useState(false);
-  const { data: pupils = [] } = useQuery({ queryKey: ["pupils-min"], queryFn: () => api.pupils.all() });
+  // Only feeds the Log-visit dialog, which never renders without health:manage.
+  const { data: pupils = [] } = useQuery({ queryKey: ["pupils-min"], enabled: canManage, queryFn: () => api.pupils.all() });
   const { data = [] } = useQuery({ queryKey: ["health"], queryFn: () => api.health.list() });
   const create = useMutation({
     mutationFn: (f: any) => api.health.create(f),
@@ -38,10 +42,12 @@ function HealthPage() {
     <>
       <PageHeader title="Health records" description="Clinic visits, injuries and medication"
         actions={
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Log visit</Button></DialogTrigger>
-            <HealthForm pupils={pupils} onSubmit={(f: any) => create.mutate(f)} />
-          </Dialog>
+          canManage ? (
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Log visit</Button></DialogTrigger>
+              <HealthForm pupils={pupils} onSubmit={(f: any) => create.mutate(f)} />
+            </Dialog>
+          ) : undefined
         } />
       <div className="p-6"><div className="rounded-lg border bg-card"><Table>
         <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Pupil</TableHead><TableHead>Complaint</TableHead><TableHead>Diagnosis</TableHead><TableHead>Treatment</TableHead><TableHead>Attended by</TableHead><TableHead></TableHead></TableRow></TableHeader>
@@ -54,7 +60,7 @@ function HealthPage() {
               <TableCell className="max-w-[200px] truncate">{h.diagnosis ?? "—"}</TableCell>
               <TableCell className="max-w-[200px] truncate">{h.treatment ?? "—"}</TableCell>
               <TableCell>{h.attendedBy ?? "—"}</TableCell>
-              <TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => { if (confirm("Delete this visit?")) remove.mutate(h.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button></TableCell>
+              <TableCell className="text-right">{canManage && <Button variant="ghost" size="icon" onClick={() => { if (confirm("Delete this visit?")) remove.mutate(h.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>}</TableCell>
             </TableRow>
           ))}
         </TableBody>

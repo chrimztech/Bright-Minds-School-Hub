@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, BookOpen, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/EmptyState";
+import { useAuth, hasPermission } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/library")({
   head: () => ({ meta: [{ title: "Library" }] }),
@@ -37,6 +38,8 @@ function LibraryPage() {
 
 function Books() {
   const qc = useQueryClient();
+  const { permissions } = useAuth();
+  const canManage = hasPermission(permissions, "library:manage");
   const [open, setOpen] = useState(false);
   const { data = [] } = useQuery({ queryKey: ["books"], queryFn: () => api.library.books.list() });
   const create = useMutation({
@@ -51,10 +54,12 @@ function Books() {
   });
   return (
     <div className="space-y-3 mt-4">
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Add book</Button></DialogTrigger>
-        <BookForm onSubmit={(f: any) => create.mutate(f)} />
-      </Dialog>
+      {canManage && (
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Add book</Button></DialogTrigger>
+          <BookForm onSubmit={(f: any) => create.mutate(f)} />
+        </Dialog>
+      )}
       <div className="rounded-lg border bg-card"><Table>
         <TableHeader><TableRow><TableHead>ISBN</TableHead><TableHead>Title</TableHead><TableHead>Author</TableHead><TableHead>Category</TableHead><TableHead className="text-right">Available</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
@@ -65,7 +70,7 @@ function Books() {
               <TableCell>{b.author ?? "—"}</TableCell>
               <TableCell>{b.category ?? "—"}</TableCell>
               <TableCell className="text-right">{b.copiesAvailable} / {b.copiesTotal}</TableCell>
-              <TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => { if (confirm(`Delete ${b.title}?`)) remove.mutate(b.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button></TableCell>
+              <TableCell className="text-right">{canManage && <Button variant="ghost" size="icon" onClick={() => { if (confirm(`Delete ${b.title}?`)) remove.mutate(b.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>}</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -97,6 +102,8 @@ function BookForm({ onSubmit }: any) {
 
 function Loans() {
   const qc = useQueryClient();
+  const { permissions } = useAuth();
+  const canManage = hasPermission(permissions, "library:manage");
   const [open, setOpen] = useState(false);
   const { data: books = [] } = useQuery({ queryKey: ["books-min"], queryFn: () => api.library.books.list() });
   const { data: pupils = [] } = useQuery({ queryKey: ["pupils-min"], queryFn: () => api.pupils.all() });
@@ -113,10 +120,12 @@ function Loans() {
   });
   return (
     <div className="space-y-3 mt-4">
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> New loan</Button></DialogTrigger>
-        <LoanForm books={books} pupils={pupils} onSubmit={(f: any) => create.mutate(f)} />
-      </Dialog>
+      {canManage && (
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> New loan</Button></DialogTrigger>
+          <LoanForm books={books} pupils={pupils} onSubmit={(f: any) => create.mutate(f)} />
+        </Dialog>
+      )}
       <div className="rounded-lg border bg-card"><Table>
         <TableHeader><TableRow><TableHead>Book</TableHead><TableHead>Pupil</TableHead><TableHead>Borrowed</TableHead><TableHead>Due</TableHead><TableHead>Status</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
@@ -127,7 +136,7 @@ function Loans() {
               <TableCell>{l.borrowedOn}</TableCell>
               <TableCell>{l.dueOn}</TableCell>
               <TableCell><Badge variant={l.status === "BORROWED" ? "secondary" : l.status === "OVERDUE" ? "destructive" : "default"}>{l.status.toLowerCase()}</Badge></TableCell>
-              <TableCell>{l.status === "BORROWED" && <Button size="sm" variant="outline" onClick={() => ret.mutate(l.id)}><RotateCcw className="h-4 w-4 mr-1" /> Return</Button>}</TableCell>
+              <TableCell>{canManage && l.status === "BORROWED" && <Button size="sm" variant="outline" onClick={() => ret.mutate(l.id)}><RotateCcw className="h-4 w-4 mr-1" /> Return</Button>}</TableCell>
             </TableRow>
           ))}
         </TableBody>

@@ -27,6 +27,7 @@ export interface AuthUser {
   email: string;
   fullName: string;
   roles: string[];
+  permissions: string[];
   token: string;
   mustChangePassword?: boolean;
 }
@@ -54,7 +55,12 @@ async function request<T>(
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ message: res.statusText }));
-    throw new Error(err.message ?? "Request failed");
+    const e = new Error(err.message ?? "Request failed") as Error & { status?: number };
+    // Carried through so the global query-error handler (see router.tsx) can show a real
+    // "you don't have permission" message instead of the page just rendering an empty list —
+    // most pages only destructure `data` from useQuery and never check `isError`.
+    e.status = res.status;
+    throw e;
   }
   if (res.status === 204) return undefined as T;
   return res.json();

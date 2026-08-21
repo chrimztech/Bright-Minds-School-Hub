@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Plus, Link2, KeyRound, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueries } from "@tanstack/react-query";
+import { useAuth, hasPermission } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/guardians")({
   head: () => ({ meta: [{ title: "Parents & guardians" }] }),
@@ -21,6 +22,8 @@ export const Route = createFileRoute("/_authenticated/guardians")({
 
 function Guardians() {
   const qc = useQueryClient();
+  const { permissions } = useAuth();
+  const canManage = hasPermission(permissions, "guardians:manage");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Guardian | null>(null);
   const [linkFor, setLinkFor] = useState<string | null>(null);
@@ -64,10 +67,12 @@ function Guardians() {
   return (
     <>
       <PageHeader title="Parents & guardians" actions={
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Add parent</Button></DialogTrigger>
-          <GuardianForm onSubmit={(f: any) => create.mutate(f)} />
-        </Dialog>
+        canManage ? (
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Add parent</Button></DialogTrigger>
+            <GuardianForm onSubmit={(f: any) => create.mutate(f)} />
+          </Dialog>
+        ) : undefined
       } />
       <div className="p-6">
         <div className="rounded-lg border bg-card">
@@ -104,14 +109,16 @@ function Guardians() {
                         </span>
                       </TableCell>
                       <TableCell>
-                        <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="sm" onClick={() => setLinkFor(g.id)}><Link2 className="h-4 w-4 mr-1" /> Link pupil</Button>
-                          <Button variant="ghost" size="sm" disabled={!g.email} onClick={() => setAccountFor(g)}>
-                            <KeyRound className="h-4 w-4 mr-1" /> {g.userId ? "Reset login" : "Create login"}
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => setEditing(g)}><Pencil className="h-4 w-4" /></Button>
-                          <Button variant="ghost" size="sm" onClick={() => { if (confirm(`Delete parent "${g.fullName}"?`)) remove.mutate(g.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                        </div>
+                        {canManage && (
+                          <div className="flex justify-end gap-1">
+                            <Button variant="ghost" size="sm" onClick={() => setLinkFor(g.id)}><Link2 className="h-4 w-4 mr-1" /> Link pupil</Button>
+                            <Button variant="ghost" size="sm" disabled={!g.email} onClick={() => setAccountFor(g)}>
+                              <KeyRound className="h-4 w-4 mr-1" /> {g.userId ? "Reset login" : "Create login"}
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => setEditing(g)}><Pencil className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="sm" onClick={() => { if (confirm(`Delete parent "${g.fullName}"?`)) remove.mutate(g.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
                   );

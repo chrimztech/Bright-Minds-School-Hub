@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { ImageUploadField } from "@/components/ImageUploadField";
 import { toast } from "sonner";
+import { useAuth, hasPermission } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({ meta: [{ title: "Settings" }] }),
@@ -17,6 +18,8 @@ export const Route = createFileRoute("/_authenticated/settings")({
 
 function Settings() {
   const qc = useQueryClient();
+  const { permissions } = useAuth();
+  const canEdit = hasPermission(permissions, "settings:edit");
   const { data } = useQuery({ queryKey: ["school"], queryFn: () => api.settings.get() });
   const [f, setF] = useState<any>({});
   useEffect(() => { if (data) setF(data); }, [data]);
@@ -102,7 +105,7 @@ function Settings() {
             <div><Label>Website</Label><Input value={f.website ?? ""} onChange={(e) => setF({ ...f, website: e.target.value })} /></div>
             <div><Label>Currency</Label><Input value={f.currency ?? "ZMW"} onChange={(e) => setF({ ...f, currency: e.target.value })} placeholder="ZMW" /></div>
           </div>
-          <Button onClick={() => save.mutate()}>Save changes</Button>
+          {canEdit && <Button onClick={() => save.mutate()}>Save changes</Button>}
         </CardContent></Card>
       </div>
     </>

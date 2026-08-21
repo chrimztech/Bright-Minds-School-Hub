@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth, hasPermission } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/subjects")({
   head: () => ({ meta: [{ title: "Subjects" }] }),
@@ -18,6 +19,8 @@ export const Route = createFileRoute("/_authenticated/subjects")({
 
 function Subjects() {
   const qc = useQueryClient();
+  const { permissions } = useAuth();
+  const canManage = hasPermission(permissions, "subjects:manage");
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ name: "", code: "" });
   const { data = [] } = useQuery({ queryKey: ["subjects"], queryFn: () => api.subjects.list() });
@@ -34,17 +37,19 @@ function Subjects() {
   return (
     <>
       <PageHeader title="Subjects" actions={
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Add subject</Button></DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>New subject</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <div><Label>Name</Label><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
-              <div><Label>Code</Label><Input value={f.code} onChange={(e) => setF({ ...f, code: e.target.value })} /></div>
-            </div>
-            <DialogFooter><Button onClick={() => create.mutate()} disabled={!f.name}>Save</Button></DialogFooter>
-          </DialogContent>
-        </Dialog>
+        canManage ? (
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Add subject</Button></DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>New subject</DialogTitle></DialogHeader>
+              <div className="space-y-3">
+                <div><Label>Name</Label><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
+                <div><Label>Code</Label><Input value={f.code} onChange={(e) => setF({ ...f, code: e.target.value })} /></div>
+              </div>
+              <DialogFooter><Button onClick={() => create.mutate()} disabled={!f.name}>Save</Button></DialogFooter>
+            </DialogContent>
+          </Dialog>
+        ) : undefined
       } />
       <div className="p-6">
         <div className="rounded-lg border bg-card">
@@ -57,7 +62,7 @@ function Subjects() {
                     <TableCell className="font-medium">{s.name}</TableCell>
                     <TableCell>{s.code ?? "—"}</TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" onClick={() => { if (confirm(`Delete ${s.name}?`)) remove.mutate(s.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                      {canManage && <Button variant="ghost" size="icon" onClick={() => { if (confirm(`Delete ${s.name}?`)) remove.mutate(s.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>}
                     </TableCell>
                   </TableRow>
                 ))}

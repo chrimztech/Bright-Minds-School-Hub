@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/EmptyState";
+import { useAuth, hasPermission } from "@/lib/auth";
 
 const LEAVE_TYPES = ["Sick", "Annual", "Maternity", "Paternity", "Compassionate", "Unpaid"];
 
@@ -24,8 +25,11 @@ export const Route = createFileRoute("/_authenticated/leave")({
 
 function LeavePage() {
   const qc = useQueryClient();
+  const { permissions } = useAuth();
+  const canManage = hasPermission(permissions, "leave:manage");
   const [open, setOpen] = useState(false);
-  const { data: staff = [] } = useQuery({ queryKey: ["staff-min"], queryFn: () => api.staff.all() });
+  // Only feeds the New-request dialog, which never renders without leave:manage.
+  const { data: staff = [] } = useQuery({ queryKey: ["staff-min"], enabled: canManage, queryFn: () => api.staff.all() });
   const { data = [] } = useQuery({ queryKey: ["leave"], queryFn: () => api.leave.list() });
   const create = useMutation({
     mutationFn: (f: any) => api.leave.create(f),
@@ -44,10 +48,12 @@ function LeavePage() {
     <>
       <PageHeader title="Staff leave" description="Applications, approvals and balances"
         actions={
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> New request</Button></DialogTrigger>
-            <LeaveForm staff={staff} onSubmit={(f: any) => create.mutate(f)} />
-          </Dialog>
+          canManage ? (
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> New request</Button></DialogTrigger>
+              <LeaveForm staff={staff} onSubmit={(f: any) => create.mutate(f)} />
+            </Dialog>
+          ) : undefined
         } />
       <div className="p-6"><div className="rounded-lg border bg-card"><Table>
         <TableHeader><TableRow><TableHead>Staff</TableHead><TableHead>Type</TableHead><TableHead>From</TableHead><TableHead>To</TableHead><TableHead>Reason</TableHead><TableHead>Status</TableHead><TableHead></TableHead></TableRow></TableHeader>
@@ -61,7 +67,7 @@ function LeavePage() {
               <TableCell className="max-w-[240px] truncate">{l.reason}</TableCell>
               <TableCell><Badge variant={l.status === "APPROVED" ? "default" : l.status === "REJECTED" ? "destructive" : "secondary"}>{l.status.toLowerCase()}</Badge></TableCell>
               <TableCell className="flex gap-1">
-                {l.status === "PENDING" && <>
+                {canManage && l.status === "PENDING" && <>
                   <Button size="icon" variant="ghost" onClick={() => approve.mutate(l.id)}><Check className="h-4 w-4" /></Button>
                   <Button size="icon" variant="ghost" onClick={() => reject.mutate(l.id)}><X className="h-4 w-4" /></Button>
                 </>}

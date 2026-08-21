@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Plus, Pencil, Trash2, Users, X, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { PrintOverlay, DocHeader, useSchool } from "@/components/PrintableDoc";
+import { useAuth, hasPermission } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/classes")({
   head: () => ({ meta: [{ title: "Classes" }] }),
@@ -20,6 +21,8 @@ export const Route = createFileRoute("/_authenticated/classes")({
 
 function Classes() {
   const qc = useQueryClient();
+  const { permissions } = useAuth();
+  const canManage = hasPermission(permissions, "classes:manage");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<SchoolClass | null>(null);
   const [roster, setRoster] = useState<SchoolClass | null>(null);
@@ -27,8 +30,11 @@ function Classes() {
     queryKey: ["classes-list"],
     queryFn: () => api.classes.list(),
   });
+  // Only feeds the class-teacher picker (Add/Edit class dialogs, and the reassign Select
+  // in the table) — all gated by classes:manage.
   const { data: teachers = [] } = useQuery({
     queryKey: ["teachers"],
+    enabled: canManage,
     queryFn: () => api.staff.teachers(),
   });
   const create = useMutation({
@@ -54,12 +60,14 @@ function Classes() {
   return (
     <>
       <PageHeader title="Classes & streams" actions={
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Add class</Button></DialogTrigger>
-          <DialogContent>
-            <ClassForm teachers={teachers} onSubmit={(f: any) => create.mutate(f)} />
-          </DialogContent>
-        </Dialog>
+        canManage ? (
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Add class</Button></DialogTrigger>
+            <DialogContent>
+              <ClassForm teachers={teachers} onSubmit={(f: any) => create.mutate(f)} />
+            </DialogContent>
+          </Dialog>
+        ) : undefined
       } />
       <div className="p-6">
         <div className="rounded-lg border bg-card">
@@ -73,19 +81,21 @@ function Classes() {
                     <TableCell>{c.stream ?? "—"}</TableCell>
                     <TableCell>{c.levelOrder}</TableCell>
                     <TableCell>
-                      <Select value={c.classTeacher?.id ?? "__none"} onValueChange={(v) => reassign.mutate({ id: c.id, classTeacherId: v === "__none" ? null : v })}>
-                        <SelectTrigger className="h-8 w-[200px]"><SelectValue placeholder="Assign teacher" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none">— Unassigned —</SelectItem>
-                          {teachers.map((t) => <SelectItem key={t.id} value={t.id}>{t.fullName}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+                      {canManage ? (
+                        <Select value={c.classTeacher?.id ?? "__none"} onValueChange={(v) => reassign.mutate({ id: c.id, classTeacherId: v === "__none" ? null : v })}>
+                          <SelectTrigger className="h-8 w-[200px]"><SelectValue placeholder="Assign teacher" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none">— Unassigned —</SelectItem>
+                            {teachers.map((t) => <SelectItem key={t.id} value={t.id}>{t.fullName}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      ) : (c.classTeacher?.fullName ?? "—")}
                     </TableCell>
                     <TableCell>{c.capacity ?? "—"}</TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="sm" onClick={() => setRoster(c)}><Users className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="sm" onClick={() => setEditing(c)}><Pencil className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="sm" onClick={() => { if (confirm(`Delete class "${c.name}"?`)) remove.mutate(c.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                      {canManage && <Button variant="ghost" size="sm" onClick={() => setEditing(c)}><Pencil className="h-4 w-4" /></Button>}
+                      {canManage && <Button variant="ghost" size="sm" onClick={() => { if (confirm(`Delete class "${c.name}"?`)) remove.mutate(c.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -111,6 +121,8 @@ function Classes() {
 
 function RosterDialog({ schoolClass }: { schoolClass: SchoolClass }) {
   const qc = useQueryClient();
+  const { permissions } = useAuth();
+  const canEditPupils = hasPermission(permissions, "pupils:edit");
   const [addId, setAddId] = useState("");
   const [search, setSearch] = useState("");
   const [printOpen, setPrintOpen] = useState(false);
@@ -120,7 +132,8 @@ function RosterDialog({ schoolClass }: { schoolClass: SchoolClass }) {
     queryKey: ["pupils-by-class", schoolClass.id],
     queryFn: () => api.pupils.byClass(schoolClass.id),
   });
-  const { data: allPupils = [] } = useQuery({ queryKey: ["pupils-all"], queryFn: () => api.pupils.all() });
+  // Only feeds the "add pupil to class" picker, which is itself gated by pupils:edit.
+  const { data: allPupils = [] } = useQuery({ queryKey: ["pupils-all"], enabled: canEditPupils, queryFn: () => api.pupils.all() });
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["pupils-by-class", schoolClass.id] });
@@ -152,32 +165,34 @@ function RosterDialog({ schoolClass }: { schoolClass: SchoolClass }) {
         </DialogTitle>
       </DialogHeader>
       <div className="space-y-4">
-        <div className="flex items-end gap-2">
-          <div className="flex-1">
-            <Label>Add pupil to class</Label>
-            <Input placeholder="Search name or admission no…" value={search} onChange={(e) => setSearch(e.target.value)} className="mb-1.5" />
-            <Select value={addId} onValueChange={setAddId}>
-              <SelectTrigger><SelectValue placeholder={`Pick from ${filtered.length} pupils…`} /></SelectTrigger>
-              <SelectContent>
-                {filtered.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.fullName}{p.schoolClass ? ` (currently ${p.schoolClass.name}${p.schoolClass.stream ? " " + p.schoolClass.stream : ""})` : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        {canEditPupils && (
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <Label>Add pupil to class</Label>
+              <Input placeholder="Search name or admission no…" value={search} onChange={(e) => setSearch(e.target.value)} className="mb-1.5" />
+              <Select value={addId} onValueChange={setAddId}>
+                <SelectTrigger><SelectValue placeholder={`Pick from ${filtered.length} pupils…`} /></SelectTrigger>
+                <SelectContent>
+                  {filtered.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.fullName}{p.schoolClass ? ` (currently ${p.schoolClass.name}${p.schoolClass.stream ? " " + p.schoolClass.stream : ""})` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              disabled={!addId || setClass.isPending}
+              onClick={() => {
+                const pupil = allPupils.find((p) => p.id === addId);
+                if (pupil) setClass.mutate({ pupil, classId: schoolClass.id });
+                setAddId("");
+              }}
+            >
+              Add
+            </Button>
           </div>
-          <Button
-            disabled={!addId || setClass.isPending}
-            onClick={() => {
-              const pupil = allPupils.find((p) => p.id === addId);
-              if (pupil) setClass.mutate({ pupil, classId: schoolClass.id });
-              setAddId("");
-            }}
-          >
-            Add
-          </Button>
-        </div>
+        )}
 
         <div>
           <Label className="mb-1.5 block">Currently enrolled ({inClass.length})</Label>
@@ -194,13 +209,15 @@ function RosterDialog({ schoolClass }: { schoolClass: SchoolClass }) {
                       <TableCell className="font-medium py-2">{p.fullName}</TableCell>
                       <TableCell className="font-mono text-[11.5px] text-muted-foreground py-2">{p.admissionNo}</TableCell>
                       <TableCell className="text-right py-2">
-                        <Button
-                          variant="ghost" size="sm"
-                          disabled={setClass.isPending}
-                          onClick={() => setClass.mutate({ pupil: p, classId: null })}
-                        >
-                          <X className="h-4 w-4 text-destructive" />
-                        </Button>
+                        {canEditPupils && (
+                          <Button
+                            variant="ghost" size="sm"
+                            disabled={setClass.isPending}
+                            onClick={() => setClass.mutate({ pupil: p, classId: null })}
+                          >
+                            <X className="h-4 w-4 text-destructive" />
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))

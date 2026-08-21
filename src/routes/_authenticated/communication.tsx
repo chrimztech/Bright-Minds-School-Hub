@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Send } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/EmptyState";
+import { useAuth, hasPermission } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/communication")({
   head: () => ({ meta: [{ title: "Communication" }] }),
@@ -22,6 +23,8 @@ export const Route = createFileRoute("/_authenticated/communication")({
 
 function CommunicationPage() {
   const qc = useQueryClient();
+  const { permissions } = useAuth();
+  const canManage = hasPermission(permissions, "communication:manage");
   const [f, setF] = useState({ channel: "EMAIL", subject: "", body: "", audience: "ALL_PARENTS", classId: "" });
   const { data: classes = [] } = useQuery({ queryKey: ["classes-min"], queryFn: () => api.classes.list() });
   const { data: messages = [] } = useQuery({ queryKey: ["messages"], queryFn: () => api.communication.messages.list() });
@@ -67,7 +70,7 @@ function CommunicationPage() {
           )}
           <div><Label>Subject</Label><Input value={f.subject} onChange={(e) => setF({ ...f, subject: e.target.value })} /></div>
           <div><Label>Message</Label><Textarea rows={6} value={f.body} onChange={(e) => setF({ ...f, body: e.target.value })} /></div>
-          <Button onClick={() => send.mutate()} disabled={!f.body}><Send className="h-4 w-4 mr-1" /> Send</Button>
+          {canManage && <Button onClick={() => send.mutate()} disabled={!f.body}><Send className="h-4 w-4 mr-1" /> Send</Button>}
         </CardContent></Card>
         <Card><CardContent className="p-6 space-y-3">
           <h3 className="font-semibold">Recent messages</h3>

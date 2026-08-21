@@ -5,6 +5,7 @@ type AuthCtx = {
   user: AuthUser | null;
   loading: boolean;
   roles: string[];
+  permissions: string[];
   login: (identifier: string, password: string) => Promise<{ mustChangePassword: boolean }>;
   signOut: () => void;
 };
@@ -13,6 +14,7 @@ const Ctx = createContext<AuthCtx>({
   user: null,
   loading: true,
   roles: [],
+  permissions: [],
   login: async () => ({ mustChangePassword: false }),
   signOut: () => {},
 });
@@ -34,6 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: res.email,
       fullName: res.fullName,
       roles: res.roles,
+      permissions: (res as any).permissions ?? [],
       token: res.token,
       mustChangePassword: (res as any).mustChangePassword ?? false,
     };
@@ -49,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <Ctx.Provider value={{ user, loading, roles: user?.roles ?? [], login, signOut } as AuthCtx}>
+    <Ctx.Provider value={{ user, loading, roles: user?.roles ?? [], permissions: user?.permissions ?? [], login, signOut } as AuthCtx}>
       {children}
     </Ctx.Provider>
   );
@@ -63,4 +66,15 @@ export const TEACHING_ROLES = ["SUPER_ADMIN", "HEAD_TEACHER", "DEPUTY_HEAD", "AD
 
 export function hasAny(roles: string[], needed: string[]) {
   return roles.some((r) => needed.includes(r));
+}
+
+// Checks the user's actual granted permissions (resolved server-side at login from their
+// role(s), same source of truth the backend's @PreAuthorize checks use) rather than a
+// hardcoded role-name list — this is what UI gating (nav visibility, action buttons) should
+// use so a custom role's granted permissions actually surface in the UI. Accepts either a
+// single permission or a list where any one match is sufficient (e.g. view-or-manage pairs).
+export function hasPermission(permissions: string[], required?: string | string[]) {
+  if (!required) return true;
+  const needed = Array.isArray(required) ? required : [required];
+  return needed.some((p) => permissions.includes(p));
 }

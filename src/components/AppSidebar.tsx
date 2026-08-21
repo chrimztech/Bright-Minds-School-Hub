@@ -7,10 +7,17 @@ import {
   UtensilsCrossed, BarChart3, Mail, FileSignature, History, Handshake, ChevronRight, X, ArrowUpCircle,
   type LucideIcon,
 } from "lucide-react";
-import { useAuth, hasAny, ADMIN_ROLES, FINANCE_ROLES, TEACHING_ROLES } from "@/lib/auth";
+import { useAuth, hasPermission } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 
-type NavItem = { to: string; label: string; icon: LucideIcon; roles?: string[] };
+// `permission` gates a nav item by the same permission the backend actually checks for that
+// module (view-tier where one exists, since a role granted only view rights should still
+// find the page) — this is what makes a custom role's granted permissions actually surface
+// in the sidebar, instead of the old hardcoded ADMIN_ROLES/FINANCE_ROLES/TEACHING_ROLES
+// name-lists that a custom role could never match regardless of what it was granted.
+// `roles` is reserved for identity checks that aren't really "permissions" (e.g. PARENT).
+// Neither means: visible to every authenticated user, matching the backend's open GET.
+type NavItem = { to: string; label: string; icon: LucideIcon; permission?: string | string[]; roles?: string[] };
 type NavGroup = { label: string | null; items: NavItem[] };
 
 const GROUPS: NavGroup[] = [
@@ -24,41 +31,41 @@ const GROUPS: NavGroup[] = [
   {
     label: "Academic",
     items: [
-      { to: "/admissions", label: "Admissions", icon: UserPlus, roles: ADMIN_ROLES },
-      { to: "/pupils", label: "Pupils", icon: Users },
-      { to: "/guardians", label: "Parents", icon: UserSquare2, roles: ADMIN_ROLES },
-      { to: "/staff", label: "Staff", icon: GraduationCap, roles: ADMIN_ROLES },
-      { to: "/classes", label: "Classes", icon: School, roles: ADMIN_ROLES },
-      { to: "/subjects", label: "Subjects", icon: BookOpen, roles: ADMIN_ROLES },
-      { to: "/academic-years", label: "Academic years", icon: CalendarRange, roles: ADMIN_ROLES },
-      { to: "/attendance", label: "Attendance", icon: ClipboardCheck, roles: TEACHING_ROLES },
+      { to: "/admissions", label: "Admissions", icon: UserPlus, permission: ["admissions:view", "admissions:manage"] },
+      { to: "/pupils", label: "Pupils", icon: Users, permission: "pupils:view" },
+      { to: "/guardians", label: "Parents", icon: UserSquare2, permission: "guardians:manage" },
+      { to: "/staff", label: "Staff", icon: GraduationCap, permission: "staff:view" },
+      { to: "/classes", label: "Classes", icon: School, permission: "classes:view" },
+      { to: "/subjects", label: "Subjects", icon: BookOpen, permission: ["subjects:view", "subjects:manage"] },
+      { to: "/academic-years", label: "Academic years", icon: CalendarRange, permission: "academic_years:manage" },
+      { to: "/attendance", label: "Attendance", icon: ClipboardCheck, permission: "attendance:view" },
       { to: "/timetable", label: "Timetable", icon: CalendarDays },
       { to: "/homework", label: "Homework", icon: BookMarked },
-      { to: "/exams", label: "Exams", icon: ScrollText, roles: TEACHING_ROLES },
-      { to: "/marks", label: "Marks", icon: FileText, roles: TEACHING_ROLES },
+      { to: "/exams", label: "Exams", icon: ScrollText, permission: ["exams:view", "exams:manage"] },
+      { to: "/marks", label: "Marks", icon: FileText, permission: ["exams:view", "exams:manage"] },
       { to: "/report-cards", label: "Report cards", icon: FileText },
-      { to: "/promotions", label: "Promotions", icon: ArrowUpCircle, roles: ADMIN_ROLES },
+      { to: "/promotions", label: "Promotions", icon: ArrowUpCircle, permission: "promotions:manage" },
     ],
   },
   {
     label: "Finance",
     items: [
-      { to: "/fees", label: "Fees & payments", icon: Wallet, roles: FINANCE_ROLES },
-      { to: "/accounts", label: "Accounts", icon: Receipt, roles: FINANCE_ROLES },
-      { to: "/payroll", label: "Payroll", icon: Briefcase, roles: FINANCE_ROLES },
-      { to: "/procurement", label: "Procurement", icon: ClipboardList, roles: ADMIN_ROLES },
+      { to: "/fees", label: "Fees & payments", icon: Wallet, permission: "fees:view" },
+      { to: "/accounts", label: "Accounts", icon: Receipt, permission: "accounts:manage" },
+      { to: "/payroll", label: "Payroll", icon: Briefcase, permission: ["payroll:view", "payroll:manage"] },
+      { to: "/procurement", label: "Procurement", icon: ClipboardList, permission: "procurement:manage" },
     ],
   },
   {
     label: "Operations",
     items: [
-      { to: "/library", label: "Library", icon: Library, roles: ADMIN_ROLES },
-      { to: "/transport", label: "Transport", icon: Bus, roles: ADMIN_ROLES },
-      { to: "/canteen", label: "Canteen", icon: UtensilsCrossed, roles: FINANCE_ROLES },
-      { to: "/health", label: "Health", icon: HeartPulse, roles: ADMIN_ROLES },
-      { to: "/inventory", label: "Inventory", icon: Boxes, roles: ADMIN_ROLES },
-      { to: "/discipline", label: "Discipline", icon: Shield, roles: TEACHING_ROLES },
-      { to: "/leave", label: "Leave", icon: FileSignature, roles: ADMIN_ROLES },
+      { to: "/library", label: "Library", icon: Library, permission: ["library:view", "library:manage"] },
+      { to: "/transport", label: "Transport", icon: Bus, permission: ["transport:view", "transport:manage"] },
+      { to: "/canteen", label: "Canteen", icon: UtensilsCrossed, permission: ["canteen:view", "canteen:manage"] },
+      { to: "/health", label: "Health", icon: HeartPulse, permission: "health:manage" },
+      { to: "/inventory", label: "Inventory", icon: Boxes, permission: "inventory:manage" },
+      { to: "/discipline", label: "Discipline", icon: Shield, permission: ["discipline:view", "discipline:manage"] },
+      { to: "/leave", label: "Leave", icon: FileSignature, permission: "leave:manage" },
     ],
   },
   {
@@ -66,19 +73,19 @@ const GROUPS: NavGroup[] = [
     items: [
       { to: "/meetings", label: "PTC Meetings", icon: Handshake },
       { to: "/calendar", label: "Calendar", icon: CalendarDays },
-      { to: "/communication", label: "Messaging", icon: Mail, roles: ADMIN_ROLES },
+      { to: "/communication", label: "Messaging", icon: Mail, permission: "communication:manage" },
       { to: "/announcements", label: "Announcements", icon: Megaphone },
-      { to: "/documents", label: "Documents", icon: FolderOpen },
+      { to: "/documents", label: "Documents", icon: FolderOpen, permission: ["documents:view", "documents:manage"] },
     ],
   },
   {
     label: "Admin",
     items: [
-      { to: "/reports", label: "Reports", icon: BarChart3, roles: ADMIN_ROLES },
-      { to: "/users", label: "Users & roles", icon: Users, roles: ADMIN_ROLES },
-      { to: "/audit", label: "Audit log", icon: History, roles: ADMIN_ROLES },
-      { to: "/backup", label: "Backup", icon: DatabaseBackup, roles: ADMIN_ROLES },
-      { to: "/settings", label: "Settings", icon: Settings, roles: ADMIN_ROLES },
+      { to: "/reports", label: "Reports", icon: BarChart3, permission: "reports:view" },
+      { to: "/users", label: "Users & roles", icon: Users, permission: ["users:manage", "roles:manage"] },
+      { to: "/audit", label: "Audit log", icon: History, permission: "audit:view" },
+      { to: "/backup", label: "Backup", icon: DatabaseBackup, permission: "backup:create" },
+      { to: "/settings", label: "Settings", icon: Settings, permission: "settings:edit" },
     ],
   },
 ];
@@ -91,15 +98,16 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({ mobileOpen = false, onMobileClose }: AppSidebarProps) {
-  const { roles, signOut, user } = useAuth();
+  const { roles, permissions, signOut, user } = useAuth();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
 
   const isParentOnly = roles.length > 0 && roles.every((r) => r === "PARENT");
 
   function canSee(item: NavItem): boolean {
     if (isParentOnly) return PARENT_ONLY.includes(item.to);
-    if (!item.roles) return true;
-    return hasAny(roles, item.roles) || roles.includes("SUPER_ADMIN");
+    if (item.roles && !item.roles.some((r) => roles.includes(r))) return false;
+    if (!hasPermission(permissions, item.permission)) return false;
+    return true;
   }
 
   const groups = GROUPS

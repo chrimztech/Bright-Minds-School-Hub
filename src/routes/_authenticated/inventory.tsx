@@ -14,6 +14,7 @@ import { Plus, AlertTriangle, ArrowUpDown, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { money } from "@/lib/format";
 import { EmptyState } from "@/components/EmptyState";
+import { useAuth, hasPermission } from "@/lib/auth";
 
 const CATS = ["Stationery","Textbooks","Exercise books","Uniforms","Cleaning","Sports","Furniture","Computers","Kitchen","Medical","Office","Other"];
 
@@ -24,6 +25,8 @@ export const Route = createFileRoute("/_authenticated/inventory")({
 
 function InventoryPage() {
   const qc = useQueryClient();
+  const { permissions } = useAuth();
+  const canManage = hasPermission(permissions, "inventory:manage");
   const [openI, setOpenI] = useState(false);
   const [openT, setOpenT] = useState<any>(null);
   const { data = [] } = useQuery({ queryKey: ["inv"], queryFn: () => api.inventory.items.list() });
@@ -47,10 +50,12 @@ function InventoryPage() {
     <>
       <PageHeader title="Inventory" description="School stores and stock control"
         actions={
-          <Dialog open={openI} onOpenChange={setOpenI}>
-            <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Add item</Button></DialogTrigger>
-            <ItemForm onSubmit={(f: any) => create.mutate(f)} />
-          </Dialog>
+          canManage ? (
+            <Dialog open={openI} onOpenChange={setOpenI}>
+              <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Add item</Button></DialogTrigger>
+              <ItemForm onSubmit={(f: any) => create.mutate(f)} />
+            </Dialog>
+          ) : undefined
         } />
       <div className="p-6"><div className="rounded-lg border bg-card"><Table>
         <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Category</TableHead><TableHead className="text-right">Qty</TableHead><TableHead className="text-right">Reorder</TableHead><TableHead className="text-right">Unit cost</TableHead><TableHead></TableHead></TableRow></TableHeader>
@@ -65,8 +70,8 @@ function InventoryPage() {
               <TableCell className="text-right">{i.reorderLevel}</TableCell>
               <TableCell className="text-right">{money(i.unitCost ?? 0)}</TableCell>
               <TableCell className="flex gap-1 justify-end">
-                <Button size="sm" variant="outline" onClick={() => setOpenT(i)}><ArrowUpDown className="h-4 w-4 mr-1" /> Move</Button>
-                <Button variant="ghost" size="icon" onClick={() => { if (confirm(`Delete ${i.name}?`)) remove.mutate(i.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                {canManage && <Button size="sm" variant="outline" onClick={() => setOpenT(i)}><ArrowUpDown className="h-4 w-4 mr-1" /> Move</Button>}
+                {canManage && <Button variant="ghost" size="icon" onClick={() => { if (confirm(`Delete ${i.name}?`)) remove.mutate(i.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>}
               </TableCell>
             </TableRow>
           ))}

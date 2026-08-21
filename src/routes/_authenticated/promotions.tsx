@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/EmptyState";
 import { ArrowUpCircle, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth, hasPermission } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/promotions")({
   head: () => ({ meta: [{ title: "Pupil promotions" }] }),
@@ -23,6 +24,8 @@ export const Route = createFileRoute("/_authenticated/promotions")({
 
 function PromotionsPage() {
   const qc = useQueryClient();
+  const { permissions } = useAuth();
+  const canManage = hasPermission(permissions, "promotions:manage");
   const [sourceClassId, setSourceClassId] = useState("");
   const [targetClassId, setTargetClassId] = useState("");
   const [academicYearId, setAcademicYearId] = useState("");
@@ -131,11 +134,13 @@ function PromotionsPage() {
                 </Table>
               </div>
             )}
-            <div className="flex justify-end mt-4">
-              <Button onClick={() => promote.mutate()} disabled={!selected.length || !targetClassId || !promotedOn || promote.isPending}>
-                <CheckCircle2 className="h-4 w-4 mr-1.5" /> {promote.isPending ? "Promoting…" : `Promote ${selected.length || "selected"}`}
-              </Button>
-            </div>
+            {canManage && (
+              <div className="flex justify-end mt-4">
+                <Button onClick={() => promote.mutate()} disabled={!selected.length || !targetClassId || !promotedOn || promote.isPending}>
+                  <CheckCircle2 className="h-4 w-4 mr-1.5" /> {promote.isPending ? "Promoting…" : `Promote ${selected.length || "selected"}`}
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
