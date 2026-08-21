@@ -66,7 +66,7 @@ const GROUPS: NavGroup[] = [
     items: [
       { to: "/meetings", label: "PTC Meetings", icon: Handshake },
       { to: "/calendar", label: "Calendar", icon: CalendarDays },
-      { to: "/communication", label: "Messaging", icon: Mail },
+      { to: "/communication", label: "Messaging", icon: Mail, roles: ADMIN_ROLES },
       { to: "/announcements", label: "Announcements", icon: Megaphone },
       { to: "/documents", label: "Documents", icon: FolderOpen },
     ],
