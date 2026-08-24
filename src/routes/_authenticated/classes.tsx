@@ -138,7 +138,7 @@ function RosterDialog({ schoolClass }: { schoolClass: SchoolClass }) {
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["pupils-by-class", schoolClass.id] });
     qc.invalidateQueries({ queryKey: ["pupils-all"] });
-    qc.invalidateQueries({ queryKey: ["pupils"] });
+    qc.invalidateQueries({ queryKey: ["pupils-all"] });
   };
 
   const setClass = useMutation({

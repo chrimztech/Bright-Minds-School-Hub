@@ -13,6 +13,8 @@ import { Plus, ExternalLink, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/EmptyState";
 import { useAuth, hasPermission } from "@/lib/auth";
+import { usePagination } from "@/hooks/use-pagination";
+import { PaginationBar } from "@/components/PaginationBar";
 
 export const Route = createFileRoute("/_authenticated/documents")({
   head: () => ({ meta: [{ title: "Documents" }] }),
@@ -25,6 +27,7 @@ function DocumentsPage() {
   const canManage = hasPermission(permissions, "documents:manage");
   const [open, setOpen] = useState(false);
   const { data = [] } = useQuery({ queryKey: ["docs"], queryFn: () => api.documents.list() });
+  const { pageItems: pagedDocs, page, setPage, totalPages, pageSize, total } = usePagination(data, 25);
   const create = useMutation({
     mutationFn: (f: any) => api.documents.create(f),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["docs"] }); toast.success("Document linked"); setOpen(false); },
@@ -58,7 +61,7 @@ function DocumentsPage() {
       <div className="p-6"><div className="rounded-lg border bg-card"><Table>
         <TableHeader><TableRow><TableHead>Title</TableHead><TableHead>Category</TableHead><TableHead>Description</TableHead><TableHead>Added</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
-          {data.length === 0 ? <TableRow><TableCell colSpan={5}><EmptyState /></TableCell></TableRow> : data.map((d) => (
+          {data.length === 0 ? <TableRow><TableCell colSpan={5}><EmptyState /></TableCell></TableRow> : pagedDocs.map((d) => (
             <TableRow key={d.id}>
               <TableCell className="font-medium">{d.title}</TableCell>
               <TableCell>{d.category ?? "—"}</TableCell>
@@ -71,7 +74,9 @@ function DocumentsPage() {
             </TableRow>
           ))}
         </TableBody>
-      </Table></div></div>
+      </Table></div>
+      <PaginationBar page={page} totalPages={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} />
+      </div>
     </>
   );
 }

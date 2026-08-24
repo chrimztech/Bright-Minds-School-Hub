@@ -14,6 +14,8 @@ import { Plus, Link2, KeyRound, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueries } from "@tanstack/react-query";
 import { useAuth, hasPermission } from "@/lib/auth";
+import { usePagination } from "@/hooks/use-pagination";
+import { PaginationBar } from "@/components/PaginationBar";
 
 export const Route = createFileRoute("/_authenticated/guardians")({
   head: () => ({ meta: [{ title: "Parents & guardians" }] }),
@@ -34,14 +36,19 @@ function Guardians() {
     queryFn: () => api.guardians.list(),
   });
 
+  const { pageItems: pagedGuardians, page, setPage, totalPages, pageSize, total } = usePagination(guardians, 25);
+
+  // Only fetch linked-pupils for the guardians actually shown on this page — this was firing
+  // one request per guardian in the whole school on every load, which only stayed unnoticed
+  // because no list here ever got large enough to make it visible.
   const pupilQueries = useQueries({
-    queries: guardians.map((g) => ({
+    queries: pagedGuardians.map((g) => ({
       queryKey: ["guardian-pupils", g.id],
       queryFn: () => api.guardians.pupilsFor(g.id),
-      enabled: guardians.length > 0,
+      enabled: pagedGuardians.length > 0,
     })),
   });
-  const pupilsByGuardian = new Map(guardians.map((g, i) => [g.id, pupilQueries[i]?.data ?? []]));
+  const pupilsByGuardian = new Map(pagedGuardians.map((g, i) => [g.id, pupilQueries[i]?.data ?? []]));
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["guardians"] });
@@ -80,7 +87,7 @@ function Guardians() {
             <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Relationship</TableHead><TableHead>Phone</TableHead><TableHead>Email</TableHead><TableHead>Linked pupil(s)</TableHead><TableHead>Login</TableHead><TableHead></TableHead></TableRow></TableHeader>
             <TableBody>
               {guardians.length === 0 ? <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No parents yet.</TableCell></TableRow>
-                : guardians.map((g) => {
+                : pagedGuardians.map((g) => {
                   const linkedPupils = pupilsByGuardian.get(g.id) ?? [];
                   return (
                     <TableRow key={g.id}>
@@ -126,6 +133,7 @@ function Guardians() {
             </TableBody>
           </Table>
         </div>
+        <PaginationBar page={page} totalPages={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} />
       </div>
       {editing && (
         <Dialog open onOpenChange={() => setEditing(null)}>

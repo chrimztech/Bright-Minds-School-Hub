@@ -12,11 +12,13 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, PackageCheck, X } from "lucide-react";
+import { Plus, Trash2, PackageCheck, X, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { money } from "@/lib/format";
 import { EmptyState } from "@/components/EmptyState";
 import { useAuth, hasPermission } from "@/lib/auth";
+import { usePagination } from "@/hooks/use-pagination";
+import { PaginationBar } from "@/components/PaginationBar";
 
 // RECEIVED is intentionally excluded — it's only reachable via the dedicated "Receive"
 // action, which is what actually credits inventory stock (see ProcurementController).
@@ -47,10 +49,17 @@ function Suppliers() {
   const { permissions } = useAuth();
   const canManage = hasPermission(permissions, "procurement:manage");
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<any | null>(null);
   const { data = [] } = useQuery({ queryKey: ["sups"], queryFn: () => api.procurement.suppliers.list() });
+  const { pageItems: pagedSups, page, setPage, totalPages, pageSize, total } = usePagination(data, 25);
   const create = useMutation({
     mutationFn: (f: any) => api.procurement.suppliers.create(f),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["sups"] }); toast.success("Supplier added"); setOpen(false); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const update = useMutation({
+    mutationFn: (f: any) => api.procurement.suppliers.update(editing.id, f),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["sups"] }); toast.success("Supplier updated"); setEditing(null); },
     onError: (e: any) => toast.error(e.message),
   });
   const remove = useMutation({
@@ -58,39 +67,64 @@ function Suppliers() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["sups"] }); toast.success("Deleted"); },
     onError: (e: any) => toast.error(e.message),
   });
-  const [f, setF] = useState({ name: "", contactPerson: "", phone: "", email: "", address: "", taxNo: "", notes: "" });
   return (
     <div className="space-y-3 mt-4">
       {canManage && (
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Add supplier</Button></DialogTrigger>
-          <DialogContent><DialogHeader><DialogTitle>New supplier</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <div><Label>Name</Label><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><Label>Contact</Label><Input value={f.contactPerson} onChange={(e) => setF({ ...f, contactPerson: e.target.value })} /></div>
-                <div><Label>Phone</Label><Input value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></div>
-              </div>
-              <div><Label>Email</Label><Input value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><Label>Tax no. (TPIN)</Label><Input value={f.taxNo} onChange={(e) => setF({ ...f, taxNo: e.target.value })} /></div>
-                <div><Label>Address</Label><Input value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} /></div>
-              </div>
-              <div><Label>Notes</Label><Textarea value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></div>
-            </div>
-            <DialogFooter><Button onClick={() => create.mutate(f)} disabled={!f.name}>Save</Button></DialogFooter>
-          </DialogContent>
+          <SupplierForm onSubmit={(f: any) => create.mutate(f)} />
         </Dialog>
       )}
       <div className="rounded-lg border bg-card"><Table>
         <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Contact</TableHead><TableHead>Phone</TableHead><TableHead>Email</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
-          {data.length === 0 ? <TableRow><TableCell colSpan={5}><EmptyState /></TableCell></TableRow> : data.map((s) => (
-            <TableRow key={s.id}><TableCell className="font-medium">{s.name}</TableCell><TableCell>{s.contactPerson ?? "—"}</TableCell><TableCell>{s.phone ?? "—"}</TableCell><TableCell>{s.email ?? "—"}</TableCell><TableCell className="text-right">{canManage && <Button variant="ghost" size="icon" onClick={() => { if (confirm(`Delete ${s.name}?`)) remove.mutate(s.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>}</TableCell></TableRow>
+          {data.length === 0 ? <TableRow><TableCell colSpan={5}><EmptyState /></TableCell></TableRow> : pagedSups.map((s) => (
+            <TableRow key={s.id}>
+              <TableCell className="font-medium">{s.name}</TableCell><TableCell>{s.contactPerson ?? "—"}</TableCell><TableCell>{s.phone ?? "—"}</TableCell><TableCell>{s.email ?? "—"}</TableCell>
+              <TableCell className="text-right">
+                {canManage && (
+                  <>
+                    <Button variant="ghost" size="icon" onClick={() => setEditing(s)}><Pencil className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => { if (confirm(`Delete ${s.name}?`)) remove.mutate(s.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  </>
+                )}
+              </TableCell>
+            </TableRow>
           ))}
         </TableBody>
       </Table></div>
+      <PaginationBar page={page} totalPages={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} />
+
+      {editing && (
+        <Dialog open onOpenChange={(o) => { if (!o) setEditing(null); }}>
+          <SupplierForm initial={editing} title="Edit supplier" onSubmit={(f: any) => update.mutate(f)} />
+        </Dialog>
+      )}
     </div>
+  );
+}
+
+function SupplierForm({ initial, title, onSubmit }: any) {
+  const [f, setF] = useState(initial
+    ? { name: initial.name, contactPerson: initial.contactPerson ?? "", phone: initial.phone ?? "", email: initial.email ?? "", address: initial.address ?? "", taxNo: initial.taxNo ?? "", notes: initial.notes ?? "" }
+    : { name: "", contactPerson: "", phone: "", email: "", address: "", taxNo: "", notes: "" });
+  return (
+    <DialogContent><DialogHeader><DialogTitle>{title ?? "New supplier"}</DialogTitle></DialogHeader>
+      <div className="space-y-3">
+        <div><Label>Name</Label><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><Label>Contact</Label><Input value={f.contactPerson} onChange={(e) => setF({ ...f, contactPerson: e.target.value })} /></div>
+          <div><Label>Phone</Label><Input value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></div>
+        </div>
+        <div><Label>Email</Label><Input value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><Label>Tax no. (TPIN)</Label><Input value={f.taxNo} onChange={(e) => setF({ ...f, taxNo: e.target.value })} /></div>
+          <div><Label>Address</Label><Input value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} /></div>
+        </div>
+        <div><Label>Notes</Label><Textarea value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></div>
+      </div>
+      <DialogFooter><Button onClick={() => onSubmit(f)} disabled={!f.name}>Save</Button></DialogFooter>
+    </DialogContent>
   );
 }
 
@@ -103,6 +137,7 @@ function POs() {
   const { data: sups = [] } = useQuery({ queryKey: ["sups-min"], enabled: canManage, queryFn: () => api.procurement.suppliers.list() });
   const { data: invItems = [] } = useQuery({ queryKey: ["inventory-min"], enabled: canManage, queryFn: () => api.inventory.items.list() });
   const { data = [] } = useQuery({ queryKey: ["pos"], queryFn: () => api.procurement.orders.list() });
+  const { pageItems: pagedPos, page, setPage, totalPages, pageSize, total } = usePagination(data, 25);
   const create = useMutation({
     mutationFn: (f: any) => api.procurement.orders.create(f),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["pos"] }); toast.success("PO created"); setOpen(false); },
@@ -190,7 +225,7 @@ function POs() {
       <div className="rounded-lg border bg-card"><Table>
         <TableHeader><TableRow><TableHead>PO no</TableHead><TableHead>Supplier</TableHead><TableHead>Date</TableHead><TableHead className="text-right">Total</TableHead><TableHead>Status</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
-          {data.length === 0 ? <TableRow><TableCell colSpan={6}><EmptyState /></TableCell></TableRow> : data.map((p) => (
+          {data.length === 0 ? <TableRow><TableCell colSpan={6}><EmptyState /></TableCell></TableRow> : pagedPos.map((p) => (
             <TableRow key={p.id}>
               <TableCell className="font-mono text-xs">{p.poNo}</TableCell>
               <TableCell>{p.supplier?.name ?? "—"}</TableCell>
@@ -218,6 +253,7 @@ function POs() {
           ))}
         </TableBody>
       </Table></div>
+      <PaginationBar page={page} totalPages={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} />
     </div>
   );
 }

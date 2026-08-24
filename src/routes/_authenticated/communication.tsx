@@ -15,6 +15,8 @@ import { Send } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/EmptyState";
 import { useAuth, hasPermission } from "@/lib/auth";
+import { usePagination } from "@/hooks/use-pagination";
+import { PaginationBar } from "@/components/PaginationBar";
 
 export const Route = createFileRoute("/_authenticated/communication")({
   head: () => ({ meta: [{ title: "Communication" }] }),
@@ -25,21 +27,26 @@ function CommunicationPage() {
   const qc = useQueryClient();
   const { permissions } = useAuth();
   const canManage = hasPermission(permissions, "communication:manage");
-  const [f, setF] = useState({ channel: "EMAIL", subject: "", body: "", audience: "ALL_PARENTS", classId: "" });
+  const [f, setF] = useState({ channel: "EMAIL", subject: "", body: "", audience: "ALL_PARENTS", classId: "", recipientLabel: "" });
   const { data: classes = [] } = useQuery({ queryKey: ["classes-min"], queryFn: () => api.classes.list() });
   const { data: messages = [] } = useQuery({ queryKey: ["messages"], queryFn: () => api.communication.messages.list() });
+  const { pageItems: pagedMessages, page, setPage, totalPages, pageSize, total } = usePagination(messages, 25);
   const send = useMutation({
     mutationFn: () => api.communication.messages.send({
       channel: f.channel, audience: f.audience,
       classId: f.classId || undefined, subject: f.subject, body: f.body,
+      recipientLabel: f.audience === "INDIVIDUAL" ? f.recipientLabel : undefined,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["messages"] });
       toast.success("Sent");
-      setF({ ...f, subject: "", body: "" });
+      setF({ ...f, subject: "", body: "", recipientLabel: "" });
     },
     onError: (e: any) => toast.error(e.message),
   });
+  // This log has no real email/SMS/WhatsApp dispatch integration behind it (no guardian/staff
+  // record to target), so "individual" just records who was contacted rather than looking one up.
+  const canSend = !!f.body && (f.audience !== "INDIVIDUAL" || !!f.recipientLabel.trim());
   return (
     <>
       <PageHeader title="Communication" description="Announcements, SMS, email and WhatsApp templates" />
@@ -68,25 +75,31 @@ function CommunicationPage() {
               </Select>
             </div>
           )}
+          {f.audience === "INDIVIDUAL" && (
+            <div><Label>Recipient</Label>
+              <Input placeholder="Name and/or contact (e.g. Jane Banda — 097xxxxxxx)" value={f.recipientLabel} onChange={(e) => setF({ ...f, recipientLabel: e.target.value })} />
+            </div>
+          )}
           <div><Label>Subject</Label><Input value={f.subject} onChange={(e) => setF({ ...f, subject: e.target.value })} /></div>
           <div><Label>Message</Label><Textarea rows={6} value={f.body} onChange={(e) => setF({ ...f, body: e.target.value })} /></div>
-          {canManage && <Button onClick={() => send.mutate()} disabled={!f.body}><Send className="h-4 w-4 mr-1" /> Send</Button>}
+          {canManage && <Button onClick={() => send.mutate()} disabled={!canSend}><Send className="h-4 w-4 mr-1" /> Send</Button>}
         </CardContent></Card>
         <Card><CardContent className="p-6 space-y-3">
           <h3 className="font-semibold">Recent messages</h3>
           <div className="rounded-lg border"><Table>
             <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Channel</TableHead><TableHead>Subject</TableHead><TableHead className="text-right">Recipients</TableHead></TableRow></TableHeader>
             <TableBody>
-              {messages.length === 0 ? <TableRow><TableCell colSpan={4}><EmptyState /></TableCell></TableRow> : messages.map((m) => (
+              {messages.length === 0 ? <TableRow><TableCell colSpan={4}><EmptyState /></TableCell></TableRow> : pagedMessages.map((m) => (
                 <TableRow key={m.id}>
                   <TableCell>{new Date(m.sentAt).toLocaleDateString()}</TableCell>
                   <TableCell><Badge variant="secondary">{m.channel.toLowerCase()}</Badge></TableCell>
                   <TableCell className="max-w-[200px] truncate">{m.subject ?? m.body.slice(0,40)}</TableCell>
-                  <TableCell className="text-right">{m.recipientCount ?? "—"}</TableCell>
+                  <TableCell className="text-right">{m.recipientLabel ?? m.recipientCount ?? "—"}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table></div>
+          <PaginationBar page={page} totalPages={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} />
         </CardContent></Card>
       </div>
     </>

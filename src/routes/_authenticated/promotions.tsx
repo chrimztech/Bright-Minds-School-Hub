@@ -63,7 +63,7 @@ function PromotionsPage() {
       setTargetClassId("");
       setNotes("");
       qc.invalidateQueries({ queryKey: ["promotion-pupils"] });
-      qc.invalidateQueries({ queryKey: ["pupils"] });
+      qc.invalidateQueries({ queryKey: ["pupils-all"] });
     },
     onError: (error: any) => toast.error(error.message),
   });

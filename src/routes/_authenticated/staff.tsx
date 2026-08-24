@@ -18,6 +18,8 @@ import { Plus, Pencil, Trash2, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { money } from "@/lib/format";
 import { useAuth, hasPermission } from "@/lib/auth";
+import { usePagination } from "@/hooks/use-pagination";
+import { PaginationBar } from "@/components/PaginationBar";
 
 export const Route = createFileRoute("/_authenticated/staff")({
   head: () => ({ meta: [{ title: "Staff" }] }),
@@ -56,6 +58,7 @@ function Staff() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["staff"] }); toast.success("Staff deleted"); },
     onError: (e: any) => toast.error(e.message),
   });
+  const { pageItems: pagedStaff, page, setPage, totalPages, pageSize, total } = usePagination(staff, 25);
   return (
     <>
       <PageHeader title="Teachers & staff" actions={
@@ -72,7 +75,7 @@ function Staff() {
             <TableHeader><TableRow><TableHead>Staff #</TableHead><TableHead>Name</TableHead><TableHead>Role</TableHead><TableHead>Contract end</TableHead><TableHead>Phone</TableHead><TableHead>Salary</TableHead><TableHead>Login</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
             <TableBody>
               {staff.length === 0 ? <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">No staff yet.</TableCell></TableRow>
-                : staff.map((s) => (
+                : pagedStaff.map((s) => (
                   <TableRow key={s.id}>
                     <TableCell className="font-mono text-xs">{s.staffNo}</TableCell>
                     <TableCell className="font-medium">
@@ -104,6 +107,7 @@ function Staff() {
             </TableBody>
           </Table>
         </div>
+        <PaginationBar page={page} totalPages={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} />
       </div>
       {editing && (
         <Dialog open onOpenChange={() => setEditing(null)}>

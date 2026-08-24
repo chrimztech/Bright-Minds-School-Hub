@@ -90,7 +90,7 @@ const GROUPS: NavGroup[] = [
   },
 ];
 
-const PARENT_ONLY = ["/portal", "/announcements", "/calendar", "/meetings"];
+const PARENT_ONLY = ["/dashboard", "/portal", "/announcements", "/calendar", "/meetings"];
 
 interface AppSidebarProps {
   mobileOpen?: boolean;

@@ -15,6 +15,8 @@ import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/EmptyState";
 import { useAuth, hasPermission } from "@/lib/auth";
+import { usePagination } from "@/hooks/use-pagination";
+import { PaginationBar } from "@/components/PaginationBar";
 
 const KINDS = ["INCIDENT", "MERIT", "DEMERIT", "REWARD", "WARNING"];
 
@@ -33,6 +35,7 @@ function DisciplinePage() {
   // view-only user on every page load, even though the dialog was already correctly hidden.
   const { data: pupils = [] } = useQuery({ queryKey: ["pupils-min"], enabled: canManage, queryFn: () => api.pupils.all() });
   const { data = [] } = useQuery({ queryKey: ["discipline"], queryFn: () => api.discipline.list() });
+  const { pageItems: pagedDiscipline, page, setPage, totalPages, pageSize, total } = usePagination(data, 25);
   const create = useMutation({
     mutationFn: (f: any) => api.discipline.create(f),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["discipline"] }); toast.success("Record added"); setOpen(false); },
@@ -57,7 +60,7 @@ function DisciplinePage() {
       <div className="p-6"><div className="rounded-lg border bg-card"><Table>
         <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Pupil</TableHead><TableHead>Kind</TableHead><TableHead>Description</TableHead><TableHead>Action</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
-          {data.length === 0 ? <TableRow><TableCell colSpan={6}><EmptyState /></TableCell></TableRow> : data.map((d) => (
+          {data.length === 0 ? <TableRow><TableCell colSpan={6}><EmptyState /></TableCell></TableRow> : pagedDiscipline.map((d) => (
             <TableRow key={d.id}>
               <TableCell>{d.occurredOn}</TableCell>
               <TableCell>{d.pupil?.fullName}</TableCell>
@@ -68,7 +71,9 @@ function DisciplinePage() {
             </TableRow>
           ))}
         </TableBody>
-      </Table></div></div>
+      </Table></div>
+      <PaginationBar page={page} totalPages={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} />
+      </div>
     </>
   );
 }

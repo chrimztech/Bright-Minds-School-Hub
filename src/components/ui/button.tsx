@@ -37,11 +37,39 @@ export interface ButtonProps
   asChild?: boolean;
 }
 
+// A slow network response between click and the button actually disabling (most Save buttons
+// disable via `mutation.isPending`, but that flips one render tick after the click, not
+// synchronously) was letting an impatient second click fire the same create mutation twice —
+// duplicate pupils, duplicate payments, etc. This is a same-tick guard against exactly that:
+// it blocks a second click within 600ms of the first, independent of whichever `disabled`
+// condition (if any) a given call site wires up itself.
+const DOUBLE_CLICK_GUARD_MS = 600;
+
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, onClick, ...props }, ref) => {
     const Comp = asChild ? Slot : "button";
+    const lastClickRef = React.useRef(0);
+    const handleClick = React.useCallback(
+      (event: React.MouseEvent<HTMLButtonElement>) => {
+        if (!onClick) return;
+        const now = Date.now();
+        if (now - lastClickRef.current < DOUBLE_CLICK_GUARD_MS) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        lastClickRef.current = now;
+        onClick(event);
+      },
+      [onClick],
+    );
     return (
-      <Comp className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props} />
+      <Comp
+        className={cn(buttonVariants({ variant, size, className }))}
+        ref={ref}
+        onClick={onClick ? handleClick : undefined}
+        {...props}
+      />
     );
   },
 );

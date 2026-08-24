@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { api, type AssessmentType } from "@/lib/api";
+import { api, type AssessmentType, type Exam } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth, hasPermission } from "@/lib/auth";
 
@@ -32,8 +32,10 @@ function Exams() {
   const { permissions } = useAuth();
   const canManage = hasPermission(permissions, "exams:manage");
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Exam | null>(null);
   const [termFilter, setTermFilter] = useState("");
-  const [f, setF] = useState({ name: "", termId: "", assessmentType: "" as AssessmentType | "", examDate: "", outOf: 100, weight: 1 });
+  const emptyForm = { name: "", termId: "", assessmentType: "" as AssessmentType | "", examDate: "", outOf: 100, weight: 1 };
+  const [f, setF] = useState(emptyForm);
 
   const { data: terms = [] } = useQuery({ queryKey: ["terms-all"], queryFn: () => api.academicYears.terms.all() });
   const { data = [] } = useQuery({
@@ -54,8 +56,21 @@ function Exams() {
       qc.invalidateQueries({ queryKey: ["exams"] });
       toast.success("Exam added");
       setOpen(false);
-      setF({ name: "", termId: "", assessmentType: "", examDate: "", outOf: 100, weight: 1 });
+      setF(emptyForm);
     },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const update = useMutation({
+    mutationFn: () => api.exams.update(editing!.id, {
+      name: f.name,
+      termId: f.termId || undefined,
+      assessmentType: f.assessmentType || undefined,
+      examDate: f.examDate || undefined,
+      outOf: f.outOf,
+      weight: f.weight,
+    }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["exams"] }); toast.success("Exam updated"); setEditing(null); },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -64,6 +79,11 @@ function Exams() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["exams"] }); toast.success("Deleted"); },
     onError: (e: any) => toast.error(e.message),
   });
+
+  function openEdit(exam: Exam) {
+    setEditing(exam);
+    setF({ name: exam.name, termId: exam.termId ?? "", assessmentType: exam.assessmentType ?? "", examDate: exam.examDate ?? "", outOf: exam.outOf, weight: exam.weight });
+  }
 
   const termLabel = (termId: string) => {
     const t = terms.find((t) => t.id === termId);
@@ -74,46 +94,11 @@ function Exams() {
     <>
       <PageHeader title="Exams & assessments" actions={
         canManage ? (
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) setF(emptyForm); }}>
           <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Add exam</Button></DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>New exam</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <div><Label>Name</Label><Input placeholder="Mid-term Term 1" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><Label>Term</Label>
-                  <Select value={f.termId} onValueChange={(v) => setF({ ...f, termId: v })}>
-                    <SelectTrigger><SelectValue placeholder="Select term" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">— No term —</SelectItem>
-                      {terms.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>
-                          {t.name}{t.academicYear ? ` — ${t.academicYear.name}` : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div><Label>Assessment type</Label>
-                  <Select value={f.assessmentType} onValueChange={(v) => setF({ ...f, assessmentType: v as AssessmentType })}>
-                    <SelectTrigger><SelectValue placeholder="— Type —" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">— None —</SelectItem>
-                      <SelectItem value="MID_TERM">Mid Term</SelectItem>
-                      <SelectItem value="END_OF_TERM">End of Term</SelectItem>
-                      <SelectItem value="MOCK">Mock</SelectItem>
-                      <SelectItem value="OPENER">Opener</SelectItem>
-                      <SelectItem value="OTHER">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div><Label>Date</Label><Input type="date" value={f.examDate} onChange={(e) => setF({ ...f, examDate: e.target.value })} /></div>
-                <div><Label>Out of</Label><Input type="number" value={f.outOf} onChange={(e) => setF({ ...f, outOf: Number(e.target.value) })} /></div>
-                <div><Label>Weight</Label><Input type="number" step="0.1" value={f.weight} onChange={(e) => setF({ ...f, weight: Number(e.target.value) })} /></div>
-              </div>
-            </div>
+            <ExamFormFields f={f} setF={setF} terms={terms} />
             <DialogFooter><Button onClick={() => create.mutate()} disabled={!f.name}>Save</Button></DialogFooter>
           </DialogContent>
         </Dialog>
@@ -170,9 +155,14 @@ function Exams() {
                     <TableCell>{e.outOf}</TableCell>
                     <TableCell className="text-right">
                       {canManage && (
-                        <Button variant="ghost" size="icon" onClick={() => { if (confirm(`Delete ${e.name}?`)) remove.mutate(e.id); }}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        <>
+                          <Button variant="ghost" size="icon" onClick={() => openEdit(e)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => { if (confirm(`Delete ${e.name}?`)) remove.mutate(e.id); }}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </>
                       )}
                     </TableCell>
                   </TableRow>
@@ -181,6 +171,55 @@ function Exams() {
           </Table>
         </div>
       </div>
+
+      <Dialog open={!!editing} onOpenChange={(o) => { if (!o) setEditing(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Edit exam</DialogTitle></DialogHeader>
+          <ExamFormFields f={f} setF={setF} terms={terms} />
+          <DialogFooter><Button onClick={() => update.mutate()} disabled={!f.name || update.isPending}>{update.isPending ? "Saving…" : "Save"}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
+  );
+}
+
+function ExamFormFields({ f, setF, terms }: { f: any; setF: (f: any) => void; terms: any[] }) {
+  return (
+    <div className="space-y-3">
+      <div><Label>Name</Label><Input placeholder="Mid-term Term 1" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
+      <div className="grid grid-cols-2 gap-3">
+        <div><Label>Term</Label>
+          <Select value={f.termId} onValueChange={(v) => setF({ ...f, termId: v })}>
+            <SelectTrigger><SelectValue placeholder="Select term" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">— No term —</SelectItem>
+              {terms.map((t) => (
+                <SelectItem key={t.id} value={t.id}>
+                  {t.name}{t.academicYear ? ` — ${t.academicYear.name}` : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div><Label>Assessment type</Label>
+          <Select value={f.assessmentType} onValueChange={(v) => setF({ ...f, assessmentType: v as AssessmentType })}>
+            <SelectTrigger><SelectValue placeholder="— Type —" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">— None —</SelectItem>
+              <SelectItem value="MID_TERM">Mid Term</SelectItem>
+              <SelectItem value="END_OF_TERM">End of Term</SelectItem>
+              <SelectItem value="MOCK">Mock</SelectItem>
+              <SelectItem value="OPENER">Opener</SelectItem>
+              <SelectItem value="OTHER">Other</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <div><Label>Date</Label><Input type="date" value={f.examDate} onChange={(e) => setF({ ...f, examDate: e.target.value })} /></div>
+        <div><Label>Out of</Label><Input type="number" value={f.outOf} onChange={(e) => setF({ ...f, outOf: Number(e.target.value) })} /></div>
+        <div><Label>Weight</Label><Input type="number" step="0.1" value={f.weight} onChange={(e) => setF({ ...f, weight: Number(e.target.value) })} /></div>
+      </div>
+    </div>
   );
 }

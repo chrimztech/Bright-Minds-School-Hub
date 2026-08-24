@@ -17,6 +17,8 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Pencil, CalendarDays, Clock, MapPin, CheckCircle2, XCircle, AlertCircle, Users } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/EmptyState";
+import { usePagination } from "@/hooks/use-pagination";
+import { PaginationBar } from "@/components/PaginationBar";
 
 export const Route = createFileRoute("/_authenticated/meetings")({
   head: () => ({ meta: [{ title: "PTC Meetings" }] }),
@@ -337,6 +339,7 @@ function AdminMeetingsTab() {
   const { data: teachers = [] } = useQuery({ queryKey: ["staff-teachers"], queryFn: () => api.staff.teachers() });
   const { data: guardians = [] } = useQuery({ queryKey: ["guardians-all"], queryFn: () => api.guardians.list() });
   const { data: pupils = [] } = useQuery({ queryKey: ["pupils-all"], queryFn: () => api.pupils.all() });
+  const { pageItems: pagedMeetings, page, setPage, totalPages, pageSize, total } = usePagination(meetings, 25, sessionFilter);
 
   const [f, setF] = useState({ sessionId: "", staffId: "", guardianId: "", pupilId: "", meetingDate: "", startTime: "", endTime: "", venue: "", agenda: "" });
 
@@ -493,7 +496,7 @@ function AdminMeetingsTab() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {meetings.map(m => (
+                {pagedMeetings.map(m => (
                   <TableRow key={m.id}>
                     <TableCell>
                       <p className="font-medium">{m.meetingDate}</p>
@@ -520,6 +523,9 @@ function AdminMeetingsTab() {
             </Table>
           </div>
         )}
+      {meetings.length > 0 && (
+        <PaginationBar page={page} totalPages={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} />
+      )}
 
       {/* Edit dialog */}
       <Dialog open={!!editMeeting} onOpenChange={o => !o && setEditMeeting(null)}>

@@ -17,6 +17,8 @@ import { money } from "@/lib/format";
 import { PrintOverlay, DocHeader, useSchool } from "@/components/PrintableDoc";
 import { ReceiptPrint } from "@/components/ReceiptPrint";
 import { useAuth, hasAny, ADMIN_ROLES } from "@/lib/auth";
+import { usePagination } from "@/hooks/use-pagination";
+import { PaginationBar } from "@/components/PaginationBar";
 
 export const Route = createFileRoute("/_authenticated/fees")({
   head: () => ({ meta: [{ title: "Fees & payments" }] }),
@@ -50,6 +52,8 @@ function Fees() {
 
 function InvoicesTab() {
   const qc = useQueryClient();
+  const { roles } = useAuth();
+  const canReverse = hasAny(roles, ADMIN_ROLES);
   const [open, setOpen] = useState(false);
   const [printId, setPrintId] = useState<string | null>(null);
   const [termFilter, setTermFilter] = useState("");
@@ -70,6 +74,8 @@ function InvoicesTab() {
     }),
   });
   const { data: pupils = [] } = useQuery({ queryKey: ["pupils-pick2"], queryFn: () => api.pupils.all() });
+  const { pageItems: pagedInvoices, page, setPage, totalPages, pageSize, total } =
+    usePagination(data, 25, `${termFilter}-${gradeFilter}-${classFilter}-${pupilFilter}`);
   const create = useMutation({
     mutationFn: (f: any) => api.fees.invoices.create({ pupilId: f.pupilId, description: f.description, total: f.total, dueDate: f.dueDate || undefined }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["invoices"] }); toast.success("Invoice created"); setOpen(false); },
@@ -81,6 +87,11 @@ function InvoicesTab() {
       qc.invalidateQueries({ queryKey: ["invoices"] });
       toast.success(created.length === 0 ? "No overdue invoices needed a late fee" : `Charged K35 administrative fee on ${created.length} overdue invoice${created.length !== 1 ? "s" : ""}`);
     },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const deleteInvoice = useMutation({
+    mutationFn: (id: string) => api.fees.invoices.delete(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["invoices"] }); toast.success("Invoice deleted"); },
     onError: (e: any) => toast.error(e.message),
   });
   const [f, setF] = useState({ pupilId: "", description: "", total: 0, dueDate: "" });
@@ -158,7 +169,7 @@ function InvoicesTab() {
                 <div><Label>Due date</Label><Input type="date" value={f.dueDate} onChange={(e) => setF({ ...f, dueDate: e.target.value })} /></div>
               </div>
             </div>
-            <DialogFooter><Button onClick={() => create.mutate(f)} disabled={!f.pupilId || !f.total}>Create</Button></DialogFooter>
+            <DialogFooter><Button onClick={() => create.mutate(f)} disabled={!f.pupilId || !f.total || create.isPending}>{create.isPending ? "Creating…" : "Create"}</Button></DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
@@ -167,7 +178,7 @@ function InvoicesTab() {
           <TableHeader><TableRow><TableHead>Invoice</TableHead><TableHead>Pupil</TableHead><TableHead>Description</TableHead><TableHead>Total</TableHead><TableHead>Paid</TableHead><TableHead>Balance</TableHead><TableHead>Status</TableHead><TableHead></TableHead></TableRow></TableHeader>
           <TableBody>
             {data.length === 0 ? <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No invoices.</TableCell></TableRow>
-              : data.map((i) => (
+              : pagedInvoices.map((i) => (
                 <TableRow key={i.id}>
                   <TableCell className="font-mono text-xs">{i.invoiceNo}</TableCell>
                   <TableCell>{i.pupil?.fullName}</TableCell>
@@ -176,12 +187,21 @@ function InvoicesTab() {
                   <TableCell>{money(i.paid)}</TableCell>
                   <TableCell>{money(Number(i.total) - Number(i.paid))}</TableCell>
                   <TableCell><Badge variant={i.status === "PAID" ? "default" : i.status === "PARTIAL" ? "secondary" : "destructive"}>{i.status}</Badge></TableCell>
-                  <TableCell><Button size="icon" variant="ghost" onClick={() => setPrintId(i.id)}><Printer className="h-4 w-4" /></Button></TableCell>
+                  <TableCell className="flex items-center gap-1">
+                    <Button size="icon" variant="ghost" onClick={() => setPrintId(i.id)}><Printer className="h-4 w-4" /></Button>
+                    {canReverse && Number(i.paid) === 0 && (
+                      <Button size="icon" variant="ghost" title="Delete invoice (only available while unpaid)"
+                        onClick={() => { if (confirm(`Delete invoice ${i.invoiceNo}? This cannot be undone.`)) deleteInvoice.mutate(i.id); }}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    )}
+                  </TableCell>
                 </TableRow>
               ))}
           </TableBody>
         </Table>
       </div>
+      <PaginationBar page={page} totalPages={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} />
       {printId && <InvoicePrint id={printId} onClose={() => setPrintId(null)} />}
     </div>
   );
@@ -283,6 +303,8 @@ function PaymentsTab() {
   });
   const { data: invoices = [] } = useQuery({ queryKey: ["invoices-open"], queryFn: () => api.fees.invoices.list() });
   const openInvoices = invoices.filter((i) => i.status !== "PAID" && i.status !== "CANCELLED");
+  const { pageItems: pagedPayments, page, setPage, totalPages, pageSize, total } =
+    usePagination(data, 25, `${pupilFilter}-${gradeFilter}-${classFilter}`);
   const create = useMutation({
     mutationFn: (f: any) => api.fees.payments.create({ invoiceId: f.invoiceId, amount: f.amount, method: f.method, reference: f.reference || undefined }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["payments"] }); qc.invalidateQueries({ queryKey: ["invoices"] }); toast.success("Payment recorded"); setOpen(false); },
@@ -363,7 +385,7 @@ function PaymentsTab() {
               </div>
               <div><Label>Reference</Label><Input value={f.reference} onChange={(e) => setF({ ...f, reference: e.target.value })} /></div>
             </div>
-            <DialogFooter><Button onClick={() => create.mutate(f)} disabled={!f.invoiceId || !f.amount}>Save</Button></DialogFooter>
+            <DialogFooter><Button onClick={() => create.mutate(f)} disabled={!f.invoiceId || !f.amount || create.isPending}>{create.isPending ? "Recording…" : "Save"}</Button></DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
@@ -372,7 +394,7 @@ function PaymentsTab() {
           <TableHeader><TableRow><TableHead>Receipt</TableHead><TableHead>Date</TableHead><TableHead>Pupil</TableHead><TableHead>Invoice</TableHead><TableHead>Method</TableHead><TableHead>Amount</TableHead><TableHead>Status</TableHead><TableHead></TableHead></TableRow></TableHeader>
           <TableBody>
             {data.length === 0 ? <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No payments yet.</TableCell></TableRow>
-              : data.map((p) => (
+              : pagedPayments.map((p) => (
                 <TableRow key={p.id}>
                   <TableCell className="font-mono text-xs">{p.receiptNo}</TableCell>
                   <TableCell>{p.paidOn}</TableCell>
@@ -403,6 +425,7 @@ function PaymentsTab() {
           </TableBody>
         </Table>
       </div>
+      <PaginationBar page={page} totalPages={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} />
       {receiptFor && <ReceiptPrint payment={receiptFor} onClose={() => setReceiptFor(null)} />}
       {editing && (
         <Dialog open onOpenChange={() => setEditing(null)}>
@@ -575,7 +598,7 @@ function FeeItemsTab() {
           {DUE_DATE_CATEGORIES.has(f.category) && (
             <div><Label>Due date</Label><Input type="date" value={f.dueDate} onChange={(e) => setF({ ...f, dueDate: e.target.value })} /></div>
           )}
-          <Button onClick={() => create.mutate()} disabled={!f.name || !f.amount}><Plus className="h-4 w-4 mr-1" /> Add</Button>
+          <Button onClick={() => create.mutate()} disabled={!f.name || !f.amount || create.isPending}><Plus className="h-4 w-4 mr-1" /> {create.isPending ? "Adding…" : "Add"}</Button>
         </div>
         {DUE_DATE_CATEGORIES.has(f.category) && (
           <p className="text-xs text-muted-foreground">Invoices billed from this item become eligible for the administrative late-payment fee once their due date passes.</p>

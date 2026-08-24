@@ -16,6 +16,8 @@ import { toast } from "sonner";
 import { EmptyState } from "@/components/EmptyState";
 import { money } from "@/lib/format";
 import { useAuth, hasPermission } from "@/lib/auth";
+import { usePagination } from "@/hooks/use-pagination";
+import { PaginationBar } from "@/components/PaginationBar";
 
 export const Route = createFileRoute("/_authenticated/admissions")({
   head: () => ({ meta: [{ title: "Admissions" }] }),
@@ -33,6 +35,7 @@ function AdmissionsPage() {
   // Only feeds the New-application dialog, which never renders without admissions:manage.
   const { data: classes = [] } = useQuery({ queryKey: ["classes-min"], enabled: canManage, queryFn: () => api.classes.list() });
   const { data = [] } = useQuery({ queryKey: ["admissions"], queryFn: () => api.admissions.list() });
+  const { pageItems: pagedAdmissions, page, setPage, totalPages, pageSize, total } = usePagination(data, 25);
   const create = useMutation({
     mutationFn: (f: any) => api.admissions.create(f),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["admissions"] }); toast.success("Application saved"); setOpen(false); },
@@ -47,7 +50,7 @@ function AdmissionsPage() {
   // real pupil ever created, so admissions never showed up anywhere else in the system).
   const enrol = useMutation({
     mutationFn: (id: string) => api.admissions.enroll(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admissions"] }); qc.invalidateQueries({ queryKey: ["pupils"] }); toast.success("Pupil enrolled"); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admissions"] }); qc.invalidateQueries({ queryKey: ["pupils-all"] }); toast.success("Pupil enrolled"); },
     onError: (e: any) => toast.error(e.message),
   });
   const remove = useMutation({
@@ -76,7 +79,7 @@ function AdmissionsPage() {
             </TableRow></TableHeader>
             <TableBody>
               {data.length === 0 ? <TableRow><TableCell colSpan={7}><EmptyState /></TableCell></TableRow>
-                : data.map((a) => (
+                : pagedAdmissions.map((a) => (
                   <TableRow key={a.id}>
                     <TableCell className="font-mono text-xs">{a.applicationNo}</TableCell>
                     <TableCell className="font-medium">{a.fullName}</TableCell>
@@ -107,6 +110,7 @@ function AdmissionsPage() {
             </TableBody>
           </Table>
         </div>
+        <PaginationBar page={page} totalPages={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} />
       </div>
       {feeFor && (
         <Dialog open onOpenChange={(o) => !o && setFeeFor(null)}>

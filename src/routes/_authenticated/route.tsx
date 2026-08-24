@@ -44,7 +44,11 @@ function AuthedShell() {
   useEffect(() => {
     if (!user || loading) return;
     const parentOnly = roles.length > 0 && roles.every((role) => role === "PARENT");
-    const allowed = ["/portal", "/announcements", "/calendar", "/meetings", "/change-password"];
+    // The dashboard (hero + announcements + configurable quick-links) is meant for every
+    // logged-in user, parents included — it was missing from this allow-list, so a parent
+    // landing there right after login (see auth.tsx) was bounced straight to /portal before
+    // ever seeing it.
+    const allowed = ["/dashboard", "/portal", "/announcements", "/calendar", "/meetings", "/change-password"];
     if (parentOnly && !allowed.some((path) => pathname.startsWith(path))) {
       navigate({ to: "/portal", replace: true });
     }

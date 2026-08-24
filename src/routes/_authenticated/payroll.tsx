@@ -78,6 +78,11 @@ function PayrollPage() {
     // if it's already mounted elsewhere in the app.
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["periods"] }); qc.invalidateQueries({ queryKey: ["expenses"] }); },
   });
+  const deletePeriod = useMutation({
+    mutationFn: () => api.payroll.periods.delete(periodId),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["periods"] }); setPeriodId(""); toast.success("Period deleted"); },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   const totalNet = slips.reduce((a, s) => a + Number(s.netPay), 0);
   const period = periods.find((p) => p.id === periodId);
@@ -108,6 +113,12 @@ function PayrollPage() {
             </Dialog>
             {period?.status === "DRAFT" && <Button variant="secondary" onClick={() => approvePeriod.mutate()}>Approve</Button>}
             {period?.status === "APPROVED" && <Button onClick={() => markPaid.mutate()}>Mark paid</Button>}
+            {canReverse && period?.status === "DRAFT" && slips.length === 0 && (
+              <Button size="icon" variant="ghost" title="Delete this draft period"
+                onClick={() => { if (confirm(`Delete period "${period.periodLabel}"? This cannot be undone.`)) deletePeriod.mutate(); }}>
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </Button>
+            )}
           </div>
         </div>
         <div className="rounded-lg border bg-card"><Table>

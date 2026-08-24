@@ -12,10 +12,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Trash2, UserPlus, Eye, EyeOff, KeyRound, Plus, ShieldCheck, Lock } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Trash2, UserPlus, Eye, EyeOff, KeyRound, Plus, ShieldCheck, Lock, LayoutGrid, ListChecks } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/EmptyState";
 import { useAuth, hasPermission } from "@/lib/auth";
+import { usePagination } from "@/hooks/use-pagination";
+import { PaginationBar } from "@/components/PaginationBar";
 
 const SYSTEM_ROLES = [
   "SUPER_ADMIN","HEAD_TEACHER","DEPUTY_HEAD","ADMIN",
@@ -25,6 +28,44 @@ const SYSTEM_ROLES = [
 
 function displayRole(r: string) {
   return r.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// Friendly page names for the "By page" permission view — maps a permission's `module`
+// (the DB grouping) to what the sidebar actually calls that page, so a non-technical
+// superadmin can toggle "Canteen" instead of reading raw permission:module strings.
+const PAGE_LABELS: Record<string, string> = {
+  ADMISSIONS: "Admissions",
+  PUPILS: "Pupils",
+  GUARDIANS: "Parents / guardians",
+  STAFF: "Staff",
+  CLASSES: "Classes",
+  ACADEMIC: "Academic years & subjects",
+  SUBJECTS: "Subjects",
+  ATTENDANCE: "Attendance",
+  EXAMS: "Exams & report cards",
+  PROMOTIONS: "Promotions",
+  FEES: "Fees & payments",
+  ACCOUNTS: "Accounts",
+  PAYROLL: "Payroll",
+  PROCUREMENT: "Procurement",
+  LIBRARY: "Library",
+  TRANSPORT: "Transport",
+  CANTEEN: "Canteen",
+  HEALTH: "Health",
+  INVENTORY: "Inventory",
+  DISCIPLINE: "Discipline",
+  LEAVE: "Leave",
+  COMMS: "Messaging & announcements",
+  DOCUMENTS: "Documents",
+  REPORTS: "Reports",
+  ADMIN: "Users, roles & system admin",
+  PTC: "Parent-teacher conferences",
+  EVENTS: "Events",
+  HOMEWORK: "Homework",
+  TIMETABLE: "Timetable",
+};
+function pageLabel(mod: string) {
+  return PAGE_LABELS[mod] ?? mod.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 export const Route = createFileRoute("/_authenticated/users")({
@@ -64,6 +105,7 @@ function UsersTab() {
   const [showResetPw, setShowResetPw] = useState(false);
 
   const { data: users = [] } = useQuery({ queryKey: ["users"], queryFn: () => api.users.list() });
+  const { pageItems: pagedUsers, page, setPage, totalPages, pageSize, total } = usePagination(users, 25);
   const { data: dbRoles = [] } = useQuery({ queryKey: ["roles"], queryFn: () => api.roles.list() });
   const allRoles = dbRoles.length > 0 ? dbRoles.map((r) => r.name) : SYSTEM_ROLES;
 
@@ -159,7 +201,7 @@ function UsersTab() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {users.length === 0 ? <TableRow><TableCell colSpan={6}><EmptyState /></TableCell></TableRow> : users.map((u) => (
+            {users.length === 0 ? <TableRow><TableCell colSpan={6}><EmptyState /></TableCell></TableRow> : pagedUsers.map((u) => (
               <TableRow key={u.id}>
                 <TableCell className="font-medium">{u.fullName ?? "—"}</TableCell>
                 <TableCell>{u.email}</TableCell>
@@ -207,6 +249,7 @@ function UsersTab() {
           </TableBody>
         </Table>
       </div>
+      <PaginationBar page={page} totalPages={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} />
 
       <Dialog open={!!resetting} onOpenChange={(o) => { if (!o) { setResetting(null); setResetPw(""); } }}>
         <DialogContent>
@@ -239,6 +282,7 @@ function RolesTab() {
   const { permissions: myPermissions } = useAuth();
   const canManage = hasPermission(myPermissions, "roles:manage");
   const [selectedRole, setSelectedRole] = useState<SystemRole | null>(null);
+  const [viewMode, setViewMode] = useState<"pages" | "permissions">("pages");
   const [newRoleName, setNewRoleName] = useState("");
   const [newRoleDesc, setNewRoleDesc] = useState("");
   const [newPermName, setNewPermName] = useState("");
@@ -294,6 +338,18 @@ function RolesTab() {
     setRolePerms.mutate({ roleId: selectedRole.id, permIds: next });
   }
 
+  // Grants/revokes every permission belonging to one page (module) in a single request,
+  // so a superadmin can show/hide a whole screen for a role without knowing the individual
+  // view/manage/reverse permission names underneath it.
+  function togglePage(mod: string, turnOn: boolean) {
+    if (!selectedRole) return;
+    const modPermIds = permissions.filter((p) => p.module === mod).map((p) => p.id);
+    const next = turnOn
+      ? [...new Set([...rolePerms, ...modPermIds])]
+      : [...rolePerms].filter((id) => !modPermIds.includes(id));
+    setRolePerms.mutate({ roleId: selectedRole.id, permIds: next });
+  }
+
   return (
     <div className="grid lg:grid-cols-3 gap-6 pt-4">
       {/* Left: roles list */}
@@ -341,30 +397,76 @@ function RolesTab() {
         {selectedRole ? (
           <div className="rounded-lg border bg-card">
             <div className="p-3 border-b">
-              <p className="font-medium text-sm">{displayRole(selectedRole.name)} — permissions</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Check permissions to grant access. Changes save immediately.</p>
-            </div>
-            <div className="divide-y max-h-[60vh] overflow-auto">
-              {permModules.map((mod) => (
-                <div key={mod}>
-                  <p className="px-3 py-1.5 text-[10px] uppercase tracking-widest text-muted-foreground bg-muted/40 font-medium">{mod}</p>
-                  {permissions.filter((p) => p.module === mod).map((p) => (
-                    <label key={p.id} className="flex items-start gap-3 px-3 py-2 hover:bg-muted/50 cursor-pointer">
-                      <Checkbox
-                        checked={rolePerms.has(p.id)}
-                        onCheckedChange={() => togglePerm(p.id)}
-                        disabled={!canManage || setRolePerms.isPending}
-                        className="mt-0.5"
-                      />
-                      <div>
-                        <p className="text-sm font-mono">{p.name}</p>
-                        {p.description && <p className="text-xs text-muted-foreground">{p.description}</p>}
-                      </div>
-                    </label>
-                  ))}
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-medium text-sm">{displayRole(selectedRole.name)} — permissions</p>
+                <div className="flex items-center gap-1 rounded-md border bg-muted/40 p-0.5">
+                  <button type="button" onClick={() => setViewMode("pages")}
+                    className={`flex items-center gap-1 rounded px-2 py-1 text-xs ${viewMode === "pages" ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}>
+                    <LayoutGrid className="h-3 w-3" /> By page
+                  </button>
+                  <button type="button" onClick={() => setViewMode("permissions")}
+                    className={`flex items-center gap-1 rounded px-2 py-1 text-xs ${viewMode === "permissions" ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}>
+                    <ListChecks className="h-3 w-3" /> By permission
+                  </button>
                 </div>
-              ))}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {viewMode === "pages"
+                  ? "Turn a screen on or off for this role. Changes save immediately."
+                  : "Check permissions to grant access. Changes save immediately."}
+              </p>
             </div>
+
+            {viewMode === "pages" ? (
+              <div className="divide-y max-h-[60vh] overflow-auto">
+                {permModules.map((mod) => {
+                  const modPerms = permissions.filter((p) => p.module === mod);
+                  const grantedCount = modPerms.filter((p) => rolePerms.has(p.id)).length;
+                  const state: "on" | "off" | "partial" =
+                    grantedCount === 0 ? "off" : grantedCount === modPerms.length ? "on" : "partial";
+                  return (
+                    <div key={mod} className="flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-muted/50">
+                      <div>
+                        <p className="text-sm font-medium">{pageLabel(mod)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {state === "partial" ? `${grantedCount}/${modPerms.length} permissions granted` : `${modPerms.length} permission${modPerms.length === 1 ? "" : "s"}`}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {state === "partial" && <Badge variant="outline" className="text-[10px] py-0 text-amber-600 border-amber-400">Partial</Badge>}
+                        <Switch
+                          checked={state !== "off"}
+                          onCheckedChange={(checked) => togglePage(mod, checked)}
+                          disabled={!canManage || setRolePerms.isPending}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="divide-y max-h-[60vh] overflow-auto">
+                {permModules.map((mod) => (
+                  <div key={mod}>
+                    <p className="px-3 py-1.5 text-[10px] uppercase tracking-widest text-muted-foreground bg-muted/40 font-medium">{mod}</p>
+                    {permissions.filter((p) => p.module === mod).map((p) => (
+                      <label key={p.id} className="flex items-start gap-3 px-3 py-2 hover:bg-muted/50 cursor-pointer">
+                        <Checkbox
+                          checked={rolePerms.has(p.id)}
+                          onCheckedChange={() => togglePerm(p.id)}
+                          disabled={!canManage || setRolePerms.isPending}
+                          className="mt-0.5"
+                        />
+                        <div>
+                          <p className="text-sm font-mono">{p.name}</p>
+                          {p.description && <p className="text-xs text-muted-foreground">{p.description}</p>}
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           <div className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">

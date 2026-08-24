@@ -1,12 +1,14 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowRight, Eye, EyeOff, Lock, Mail, ShieldCheck, Sparkles } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { ArrowRight, Eye, EyeOff, ExternalLink, Lock, Mail, ShieldCheck, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth";
+import { api } from "@/lib/api";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({ meta: [{ title: "Sign in — Chaz Crestview Academy" }] }),
@@ -22,6 +24,9 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  // Public, unauthenticated endpoint — superadmin-configured via the Dashboard editor,
+  // rendered here so a school can link out (website, admissions, etc.) before anyone logs in.
+  const { data: branding } = useQuery({ queryKey: ["public-branding"], queryFn: () => api.public.branding() });
 
   useEffect(() => {
     if (!loading && user) navigate({ to: "/dashboard", replace: true });
@@ -217,6 +222,18 @@ function AuthPage() {
               )}
             </Button>
           </form>
+
+          {branding?.loginButtonLabel && branding?.loginButtonUrl && (
+            <a
+              href={branding.loginButtonUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-5 flex items-center justify-center gap-2 rounded-2xl border border-border/65 bg-card/45 px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+            >
+              {branding.loginButtonLabel}
+              <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+            </a>
+          )}
 
           <div className="mt-8 flex items-start gap-3 rounded-2xl border border-border/65 bg-card/45 px-4 py-3.5">
             <div className="mt-0.5 rounded-lg bg-primary/8 p-1.5 text-primary">

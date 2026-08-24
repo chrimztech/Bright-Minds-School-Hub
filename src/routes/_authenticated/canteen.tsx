@@ -13,11 +13,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, UtensilsCrossed } from "lucide-react";
+import { Plus, Trash2, UtensilsCrossed, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { money } from "@/lib/format";
 import { EmptyState } from "@/components/EmptyState";
 import { useAuth, hasPermission } from "@/lib/auth";
+import { usePagination } from "@/hooks/use-pagination";
+import { PaginationBar } from "@/components/PaginationBar";
 
 const CATEGORIES = ["Breakfast", "Lunch", "Snack", "Drink", "Meal", "Other"];
 const METHODS = ["CASH", "MOBILE_MONEY", "ACCOUNT", "CARD"];
@@ -77,10 +79,17 @@ function Menu() {
   const { permissions } = useAuth();
   const canManage = hasPermission(permissions, "canteen:manage");
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<any | null>(null);
   const { data = [] } = useQuery({ queryKey: ["canteen-menu"], queryFn: () => api.canteen.menu.list() });
+  const { pageItems: pagedMenu, page, setPage, totalPages, pageSize, total } = usePagination(data, 25);
   const create = useMutation({
     mutationFn: (f: any) => api.canteen.menu.create(f),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["canteen-menu"] }); toast.success("Item added"); setOpen(false); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const update = useMutation({
+    mutationFn: (f: any) => api.canteen.menu.update(editing.id, f),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["canteen-menu"] }); toast.success("Item updated"); setEditing(null); },
     onError: (e: any) => toast.error(e.message),
   });
   const toggle = useMutation({
@@ -104,7 +113,7 @@ function Menu() {
       <div className="rounded-lg border bg-card"><Table>
         <TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Category</TableHead><TableHead className="text-right">Price</TableHead><TableHead>Status</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
-          {data.length === 0 ? <TableRow><TableCell colSpan={5}><EmptyState /></TableCell></TableRow> : data.map((r) => (
+          {data.length === 0 ? <TableRow><TableCell colSpan={5}><EmptyState /></TableCell></TableRow> : pagedMenu.map((r) => (
             <TableRow key={r.id}>
               <TableCell><p className="font-medium">{r.name}</p><p className="text-xs text-muted-foreground">{r.description ?? ""}</p></TableCell>
               <TableCell>{r.category}</TableCell>
@@ -119,21 +128,35 @@ function Menu() {
                 )}
               </TableCell>
               <TableCell className="text-right">
-                {canManage && <Button size="icon" variant="ghost" onClick={() => { if (confirm("Delete this item?")) remove.mutate(r.id); }}><Trash2 className="h-4 w-4" /></Button>}
+                {canManage && (
+                  <>
+                    <Button size="icon" variant="ghost" onClick={() => setEditing(r)}><Pencil className="h-4 w-4" /></Button>
+                    <Button size="icon" variant="ghost" onClick={() => { if (confirm(`Delete "${r.name}"?`)) remove.mutate(r.id); }}><Trash2 className="h-4 w-4" /></Button>
+                  </>
+                )}
               </TableCell>
             </TableRow>
           ))}
         </TableBody>
       </Table></div>
+      <PaginationBar page={page} totalPages={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} />
+
+      {editing && (
+        <Dialog open onOpenChange={(o) => { if (!o) setEditing(null); }}>
+          <MenuForm initial={editing} title="Edit menu item" onSubmit={(f: any) => update.mutate(f)} />
+        </Dialog>
+      )}
     </div>
   );
 }
 
-function MenuForm({ onSubmit }: any) {
-  const [f, setF] = useState({ name: "", description: "", category: "Meal", price: 0, isAvailable: true });
+function MenuForm({ initial, title, onSubmit }: any) {
+  const [f, setF] = useState(initial
+    ? { name: initial.name, description: initial.description ?? "", category: initial.category ?? "Meal", price: initial.price, isAvailable: initial.isAvailable }
+    : { name: "", description: "", category: "Meal", price: 0, isAvailable: true });
   return (
     <DialogContent>
-      <DialogHeader><DialogTitle>New menu item</DialogTitle></DialogHeader>
+      <DialogHeader><DialogTitle>{title ?? "New menu item"}</DialogTitle></DialogHeader>
       <div className="space-y-3">
         <div><Label>Name</Label><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
         <div className="grid grid-cols-2 gap-3">
@@ -196,7 +219,7 @@ function Plans() {
               <TableCell><p className="font-medium">{r.name}</p><p className="text-xs text-muted-foreground">{r.description ?? ""}</p></TableCell>
               <TableCell>{r.mealsPerDay}</TableCell>
               <TableCell className="text-right">{money(r.pricePerTerm)}</TableCell>
-              <TableCell className="text-right">{canManage && <Button size="icon" variant="ghost" onClick={() => { if (confirm("Delete?")) remove.mutate(r.id); }}><Trash2 className="h-4 w-4" /></Button>}</TableCell>
+              <TableCell className="text-right">{canManage && <Button size="icon" variant="ghost" onClick={() => { if (confirm(`Delete "${r.name}"?`)) remove.mutate(r.id); }}><Trash2 className="h-4 w-4" /></Button>}</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -211,6 +234,7 @@ function Subs() {
   const canManage = hasPermission(permissions, "canteen:manage");
   const [open, setOpen] = useState(false);
   const { data = [] } = useQuery({ queryKey: ["canteen-subs"], queryFn: () => api.canteen.subscriptions.list() });
+  const { pageItems: pagedSubs, page, setPage, totalPages, pageSize, total } = usePagination(data, 25);
   // Only feed the New-subscription dialog, which never renders without canteen:manage.
   const { data: pupils = [] } = useQuery({ queryKey: ["pupils-mini"], enabled: canManage, queryFn: () => api.pupils.all() });
   const { data: plans = [] } = useQuery({ queryKey: ["canteen-plans"], enabled: canManage, queryFn: () => api.canteen.plans.list() });
@@ -254,7 +278,7 @@ function Subs() {
       <div className="rounded-lg border bg-card"><Table>
         <TableHeader><TableRow><TableHead>Pupil</TableHead><TableHead>Plan</TableHead><TableHead>Start</TableHead><TableHead>Status</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
-          {data.length === 0 ? <TableRow><TableCell colSpan={5}><EmptyState /></TableCell></TableRow> : data.map((r: any) => (
+          {data.length === 0 ? <TableRow><TableCell colSpan={5}><EmptyState /></TableCell></TableRow> : pagedSubs.map((r: any) => (
             <TableRow key={r.id}>
               <TableCell>{r.pupil?.fullName ?? "—"}</TableCell>
               <TableCell>{r.plan?.name ?? "—"} <span className="text-xs text-muted-foreground ml-1">{money(r.plan?.pricePerTerm ?? 0)}</span></TableCell>
@@ -265,6 +289,7 @@ function Subs() {
           ))}
         </TableBody>
       </Table></div>
+      <PaginationBar page={page} totalPages={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} />
     </div>
   );
 }
@@ -275,6 +300,7 @@ function Sales() {
   const canManage = hasPermission(permissions, "canteen:manage");
   const [open, setOpen] = useState(false);
   const { data = [] } = useQuery({ queryKey: ["canteen-sales"], queryFn: () => api.canteen.sales.list() });
+  const { pageItems: pagedSales, page, setPage, totalPages, pageSize, total } = usePagination(data, 25);
   // Only feed the Record-sale dialog, which never renders without canteen:manage.
   const { data: items = [] } = useQuery({ queryKey: ["canteen-menu-avail"], enabled: canManage, queryFn: () => api.canteen.menu.list() });
   const { data: pupils = [] } = useQuery({ queryKey: ["pupils-mini"], enabled: canManage, queryFn: () => api.pupils.all() });
@@ -286,7 +312,9 @@ function Sales() {
       return api.canteen.sales.create({
         itemId: f.itemId,
         itemName: item?.name ?? "Item",
-        pupilId: f.pupilId,
+        // Backend and existing seed data both support pupil-less "walk-in" sales — an empty
+        // string was previously sent as a literal pupilId instead of being omitted.
+        pupilId: f.pupilId || undefined,
         quantity: f.quantity,
         unitPrice: unit,
         total: unit * Number(f.quantity || 0),
@@ -325,10 +353,11 @@ function Sales() {
               <div><Label>Quantity</Label><Input type="number" min="1" value={f.quantity} onChange={(e) => setF({ ...f, quantity: Number(e.target.value) })} /></div>
               <div><Label>Total</Label><Input disabled value={money((selected?.price ?? 0) * Number(f.quantity || 0))} /></div>
             </div>
-            <div><Label>Pupil</Label>
+            <div><Label>Pupil (optional — leave blank for a walk-in sale)</Label>
               <Select value={f.pupilId} onValueChange={(v) => setF({ ...f, pupilId: v })}>
-                <SelectTrigger><SelectValue placeholder="Select pupil" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Walk-in (no pupil)" /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="">Walk-in (no pupil)</SelectItem>
                   {pupils.map((p: any) => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.fullName}{p.schoolClass ? ` — ${p.schoolClass.name}${p.schoolClass.stream ? " " + p.schoolClass.stream : ""}` : ""}
@@ -348,14 +377,14 @@ function Sales() {
             </div>
             <div><Label>Notes</Label><Textarea value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></div>
           </div>
-          <DialogFooter><Button onClick={() => create.mutate(f)} disabled={!f.itemId || !f.quantity || !f.pupilId}>Save</Button></DialogFooter>
+          <DialogFooter><Button onClick={() => create.mutate(f)} disabled={!f.itemId || !f.quantity}>Save</Button></DialogFooter>
         </DialogContent>
       </Dialog>
       )}
       <div className="rounded-lg border bg-card"><Table>
         <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Item</TableHead><TableHead>Pupil</TableHead><TableHead>Class</TableHead><TableHead>Qty</TableHead><TableHead>Method</TableHead><TableHead className="text-right">Total</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
-          {data.length === 0 ? <TableRow><TableCell colSpan={8}><EmptyState /></TableCell></TableRow> : data.map((r: any) => (
+          {data.length === 0 ? <TableRow><TableCell colSpan={8}><EmptyState /></TableCell></TableRow> : pagedSales.map((r: any) => (
             <TableRow key={r.id}>
               <TableCell>{r.servedOn}</TableCell>
               <TableCell>{r.itemName}</TableCell>
@@ -364,11 +393,12 @@ function Sales() {
               <TableCell>{r.quantity}</TableCell>
               <TableCell>{r.paymentMethod}</TableCell>
               <TableCell className="text-right text-emerald-600">{money(r.total)}</TableCell>
-              <TableCell className="text-right">{canManage && <Button size="icon" variant="ghost" onClick={() => { if (confirm("Delete?")) remove.mutate(r.id); }}><Trash2 className="h-4 w-4" /></Button>}</TableCell>
+              <TableCell className="text-right">{canManage && <Button size="icon" variant="ghost" onClick={() => { if (confirm(`Delete this sale (${r.itemName})?`)) remove.mutate(r.id); }}><Trash2 className="h-4 w-4" /></Button>}</TableCell>
             </TableRow>
           ))}
         </TableBody>
       </Table></div>
+      <PaginationBar page={page} totalPages={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} />
     </div>
   );
 }

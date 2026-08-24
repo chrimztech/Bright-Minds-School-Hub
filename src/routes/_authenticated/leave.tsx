@@ -11,10 +11,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Check, X } from "lucide-react";
+import { Plus, Check, X, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/EmptyState";
 import { useAuth, hasPermission } from "@/lib/auth";
+import { usePagination } from "@/hooks/use-pagination";
+import { PaginationBar } from "@/components/PaginationBar";
 
 const LEAVE_TYPES = ["Sick", "Annual", "Maternity", "Paternity", "Compassionate", "Unpaid"];
 
@@ -31,6 +33,7 @@ function LeavePage() {
   // Only feeds the New-request dialog, which never renders without leave:manage.
   const { data: staff = [] } = useQuery({ queryKey: ["staff-min"], enabled: canManage, queryFn: () => api.staff.all() });
   const { data = [] } = useQuery({ queryKey: ["leave"], queryFn: () => api.leave.list() });
+  const { pageItems: pagedLeave, page, setPage, totalPages, pageSize, total } = usePagination(data, 25);
   const create = useMutation({
     mutationFn: (f: any) => api.leave.create(f),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["leave"] }); toast.success("Request submitted"); setOpen(false); },
@@ -43,6 +46,13 @@ function LeavePage() {
   const reject = useMutation({
     mutationFn: (id: string) => api.leave.reject(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["leave"] }),
+  });
+  // The API already supported deleting a request, but no UI ever called it — once a request
+  // was approved/rejected, the Approve/Reject icons disappeared and it was stuck forever.
+  const remove = useMutation({
+    mutationFn: (id: string) => api.leave.delete(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["leave"] }); toast.success("Request deleted"); },
+    onError: (e: any) => toast.error(e.message),
   });
   return (
     <>
@@ -58,7 +68,7 @@ function LeavePage() {
       <div className="p-6"><div className="rounded-lg border bg-card"><Table>
         <TableHeader><TableRow><TableHead>Staff</TableHead><TableHead>Type</TableHead><TableHead>From</TableHead><TableHead>To</TableHead><TableHead>Reason</TableHead><TableHead>Status</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
-          {data.length === 0 ? <TableRow><TableCell colSpan={7}><EmptyState /></TableCell></TableRow> : data.map((l) => (
+          {data.length === 0 ? <TableRow><TableCell colSpan={7}><EmptyState /></TableCell></TableRow> : pagedLeave.map((l) => (
             <TableRow key={l.id}>
               <TableCell>{l.staff?.fullName}</TableCell>
               <TableCell>{l.leaveType}</TableCell>
@@ -71,11 +81,19 @@ function LeavePage() {
                   <Button size="icon" variant="ghost" onClick={() => approve.mutate(l.id)}><Check className="h-4 w-4" /></Button>
                   <Button size="icon" variant="ghost" onClick={() => reject.mutate(l.id)}><X className="h-4 w-4" /></Button>
                 </>}
+                {canManage && (
+                  <Button size="icon" variant="ghost" title="Delete this request"
+                    onClick={() => { if (confirm(`Delete this leave request for ${l.staff?.fullName}?`)) remove.mutate(l.id); }}>
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                )}
               </TableCell>
             </TableRow>
           ))}
         </TableBody>
-      </Table></div></div>
+      </Table></div>
+      <PaginationBar page={page} totalPages={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} />
+      </div>
     </>
   );
 }

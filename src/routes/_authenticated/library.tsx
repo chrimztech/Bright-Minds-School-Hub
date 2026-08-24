@@ -11,10 +11,12 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, BookOpen, RotateCcw, Trash2 } from "lucide-react";
+import { Plus, BookOpen, RotateCcw, Trash2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/EmptyState";
 import { useAuth, hasPermission } from "@/lib/auth";
+import { usePagination } from "@/hooks/use-pagination";
+import { PaginationBar } from "@/components/PaginationBar";
 
 export const Route = createFileRoute("/_authenticated/library")({
   head: () => ({ meta: [{ title: "Library" }] }),
@@ -41,10 +43,17 @@ function Books() {
   const { permissions } = useAuth();
   const canManage = hasPermission(permissions, "library:manage");
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<any | null>(null);
   const { data = [] } = useQuery({ queryKey: ["books"], queryFn: () => api.library.books.list() });
+  const { pageItems: pagedBooks, page, setPage, totalPages, pageSize, total } = usePagination(data, 25);
   const create = useMutation({
     mutationFn: (f: any) => api.library.books.create(f),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["books"] }); toast.success("Book added"); setOpen(false); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const update = useMutation({
+    mutationFn: (f: any) => api.library.books.update(editing.id, f),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["books"] }); toast.success("Book updated"); setEditing(null); },
     onError: (e: any) => toast.error(e.message),
   });
   const remove = useMutation({
@@ -63,26 +72,42 @@ function Books() {
       <div className="rounded-lg border bg-card"><Table>
         <TableHeader><TableRow><TableHead>ISBN</TableHead><TableHead>Title</TableHead><TableHead>Author</TableHead><TableHead>Category</TableHead><TableHead className="text-right">Available</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
-          {data.length === 0 ? <TableRow><TableCell colSpan={6}><EmptyState /></TableCell></TableRow> : data.map((b) => (
+          {data.length === 0 ? <TableRow><TableCell colSpan={6}><EmptyState /></TableCell></TableRow> : pagedBooks.map((b) => (
             <TableRow key={b.id}>
               <TableCell className="font-mono text-xs">{b.isbn ?? "—"}</TableCell>
               <TableCell className="font-medium flex items-center gap-2"><BookOpen className="h-4 w-4 text-muted-foreground" />{b.title}</TableCell>
               <TableCell>{b.author ?? "—"}</TableCell>
               <TableCell>{b.category ?? "—"}</TableCell>
               <TableCell className="text-right">{b.copiesAvailable} / {b.copiesTotal}</TableCell>
-              <TableCell className="text-right">{canManage && <Button variant="ghost" size="icon" onClick={() => { if (confirm(`Delete ${b.title}?`)) remove.mutate(b.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>}</TableCell>
+              <TableCell className="text-right">
+                {canManage && (
+                  <>
+                    <Button variant="ghost" size="icon" onClick={() => setEditing(b)}><Pencil className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => { if (confirm(`Delete ${b.title}?`)) remove.mutate(b.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  </>
+                )}
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
       </Table></div>
+      <PaginationBar page={page} totalPages={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} />
+
+      {editing && (
+        <Dialog open onOpenChange={(o) => { if (!o) setEditing(null); }}>
+          <BookForm initial={editing} title="Edit book" onSubmit={(f: any) => update.mutate(f)} />
+        </Dialog>
+      )}
     </div>
   );
 }
 
-function BookForm({ onSubmit }: any) {
-  const [f, setF] = useState({ isbn: "", title: "", author: "", category: "", shelf: "", copiesTotal: 1 });
+function BookForm({ initial, title, onSubmit }: any) {
+  const [f, setF] = useState(initial
+    ? { isbn: initial.isbn ?? "", title: initial.title, author: initial.author ?? "", category: initial.category ?? "", shelf: initial.shelf ?? "", copiesTotal: initial.copiesTotal }
+    : { isbn: "", title: "", author: "", category: "", shelf: "", copiesTotal: 1 });
   return (
-    <DialogContent><DialogHeader><DialogTitle>New book</DialogTitle></DialogHeader>
+    <DialogContent><DialogHeader><DialogTitle>{title ?? "New book"}</DialogTitle></DialogHeader>
       <div className="space-y-3">
         <div><Label>Title</Label><Input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} /></div>
         <div className="grid grid-cols-2 gap-3">
@@ -108,6 +133,7 @@ function Loans() {
   const { data: books = [] } = useQuery({ queryKey: ["books-min"], queryFn: () => api.library.books.list() });
   const { data: pupils = [] } = useQuery({ queryKey: ["pupils-min"], queryFn: () => api.pupils.all() });
   const { data = [] } = useQuery({ queryKey: ["loans"], queryFn: () => api.library.loans.list() });
+  const { pageItems: pagedLoans, page, setPage, totalPages, pageSize, total } = usePagination(data, 25);
   const create = useMutation({
     mutationFn: (f: any) => api.library.loans.create(f),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["loans"] }); qc.invalidateQueries({ queryKey: ["books"] }); toast.success("Loan recorded"); setOpen(false); },
@@ -129,7 +155,7 @@ function Loans() {
       <div className="rounded-lg border bg-card"><Table>
         <TableHeader><TableRow><TableHead>Book</TableHead><TableHead>Pupil</TableHead><TableHead>Borrowed</TableHead><TableHead>Due</TableHead><TableHead>Status</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
-          {data.length === 0 ? <TableRow><TableCell colSpan={6}><EmptyState /></TableCell></TableRow> : data.map((l) => (
+          {data.length === 0 ? <TableRow><TableCell colSpan={6}><EmptyState /></TableCell></TableRow> : pagedLoans.map((l) => (
             <TableRow key={l.id}>
               <TableCell>{l.book?.title}</TableCell>
               <TableCell>{l.pupil?.fullName ?? "—"}</TableCell>
@@ -141,6 +167,7 @@ function Loans() {
           ))}
         </TableBody>
       </Table></div>
+      <PaginationBar page={page} totalPages={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} />
     </div>
   );
 }

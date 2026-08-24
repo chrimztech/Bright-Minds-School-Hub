@@ -15,6 +15,8 @@ import { toast } from "sonner";
 import { money } from "@/lib/format";
 import { EmptyState } from "@/components/EmptyState";
 import { useAuth, hasPermission } from "@/lib/auth";
+import { usePagination } from "@/hooks/use-pagination";
+import { PaginationBar } from "@/components/PaginationBar";
 
 export const Route = createFileRoute("/_authenticated/transport")({
   head: () => ({ meta: [{ title: "Transport" }] }),
@@ -47,6 +49,7 @@ function Vehicles() {
   const canManage = hasPermission(permissions, "transport:manage");
   const [open, setOpen] = useState(false);
   const { data = [] } = useQuery({ queryKey: ["vehicles"], queryFn: () => api.transport.vehicles.list() });
+  const { pageItems: pagedVehicles, page, setPage, totalPages, pageSize, total } = usePagination(data, 25);
   const create = useMutation({
     mutationFn: (f: any) => api.transport.vehicles.create(f),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["vehicles"] }); toast.success("Vehicle added"); setOpen(false); },
@@ -70,7 +73,7 @@ function Vehicles() {
       <div className="rounded-lg border bg-card"><Table>
         <TableHeader><TableRow><TableHead>Reg</TableHead><TableHead>Model</TableHead><TableHead>Capacity</TableHead><TableHead>Driver</TableHead><TableHead>Phone</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
-          {data.length === 0 ? <TableRow><TableCell colSpan={6}><EmptyState /></TableCell></TableRow> : data.map((v) => (
+          {data.length === 0 ? <TableRow><TableCell colSpan={6}><EmptyState /></TableCell></TableRow> : pagedVehicles.map((v) => (
             <TableRow key={v.id}>
               <TableCell className="font-medium flex items-center gap-2"><Bus className="h-4 w-4 text-muted-foreground" />{v.regNo}</TableCell>
               <TableCell>{v.model ?? "—"}</TableCell>
@@ -82,6 +85,7 @@ function Vehicles() {
           ))}
         </TableBody>
       </Table></div>
+      <PaginationBar page={page} totalPages={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} />
     </div>
   );
 }
@@ -111,6 +115,7 @@ function Routes() {
   const [open, setOpen] = useState(false);
   const [pointsFor, setPointsFor] = useState<any | null>(null);
   const { data = [] } = useQuery({ queryKey: ["routes"], queryFn: () => api.transport.routes.list() });
+  const { pageItems: pagedRoutes, page, setPage, totalPages, pageSize, total } = usePagination(data, 25);
   // Only feeds the New-route dialog's vehicle picker, gated by transport:manage.
   const { data: vehicles = [] } = useQuery({ queryKey: ["vehicles-min"], enabled: canManage, queryFn: () => api.transport.vehicles.list() });
   const create = useMutation({
@@ -136,7 +141,7 @@ function Routes() {
       <div className="rounded-lg border bg-card"><Table>
         <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Pickup points</TableHead><TableHead>Vehicle</TableHead><TableHead className="text-right">Base fee</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
-          {data.length === 0 ? <TableRow><TableCell colSpan={5}><EmptyState /></TableCell></TableRow> : data.map((r) => (
+          {data.length === 0 ? <TableRow><TableCell colSpan={5}><EmptyState /></TableCell></TableRow> : pagedRoutes.map((r) => (
             <TableRow key={r.id}>
               <TableCell className="font-medium flex items-center gap-2"><RouteIcon className="h-4 w-4 text-muted-foreground" />{r.name}</TableCell>
               <TableCell className="max-w-[280px] truncate">{r.pickupPoints ?? "—"}</TableCell>
@@ -150,6 +155,7 @@ function Routes() {
           ))}
         </TableBody>
       </Table></div>
+      <PaginationBar page={page} totalPages={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} />
       {pointsFor && (
         <Dialog open onOpenChange={(o) => !o && setPointsFor(null)}>
           <RoutePointsDialog route={pointsFor} />
@@ -229,6 +235,7 @@ function Assignments() {
   const canManage = hasPermission(permissions, "transport:manage");
   const [open, setOpen] = useState(false);
   const { data = [] } = useQuery({ queryKey: ["tx-assign"], queryFn: () => api.transport.assignments.list() });
+  const { pageItems: pagedAssignments, page, setPage, totalPages, pageSize, total } = usePagination(data, 25);
   // Only feed the Assign-pupil dialog, which never renders without transport:manage.
   const { data: pupils = [] } = useQuery({ queryKey: ["pupils-min"], enabled: canManage, queryFn: () => api.pupils.all() });
   const { data: routes = [] } = useQuery({ queryKey: ["routes-min"], enabled: canManage, queryFn: () => api.transport.routes.list() });
@@ -288,7 +295,7 @@ function Assignments() {
       <div className="rounded-lg border bg-card"><Table>
         <TableHeader><TableRow><TableHead>Pupil</TableHead><TableHead>Route</TableHead><TableHead>Pickup</TableHead><TableHead className="text-right">Fee</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
-          {data.length === 0 ? <TableRow><TableCell colSpan={5}><EmptyState /></TableCell></TableRow> : data.map((a) => (
+          {data.length === 0 ? <TableRow><TableCell colSpan={5}><EmptyState /></TableCell></TableRow> : pagedAssignments.map((a) => (
             <TableRow key={a.id}>
               <TableCell>{a.pupil?.fullName}</TableCell>
               <TableCell>{a.route?.name}</TableCell>
@@ -299,6 +306,7 @@ function Assignments() {
           ))}
         </TableBody>
       </Table></div>
+      <PaginationBar page={page} totalPages={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} />
     </div>
   );
 }

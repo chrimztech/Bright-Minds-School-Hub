@@ -17,6 +17,8 @@ import { toast } from "sonner";
 import { money } from "@/lib/format";
 import { EmptyState } from "@/components/EmptyState";
 import { useAuth, hasAny, ADMIN_ROLES } from "@/lib/auth";
+import { usePagination } from "@/hooks/use-pagination";
+import { PaginationBar } from "@/components/PaginationBar";
 
 const CATEGORIES = ["Salaries", "Utilities", "Maintenance", "Supplies", "Transport", "Food", "Events", "Other"];
 
@@ -92,6 +94,7 @@ function Expenses() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
   const { data = [] } = useQuery({ queryKey: ["expenses"], queryFn: () => api.accounts.expenses.list() });
+  const { pageItems: pagedExpenses, page, setPage, totalPages, pageSize, total } = usePagination(data, 25);
   const create = useMutation({
     mutationFn: (f: any) => api.accounts.expenses.create(f),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["expenses"] }); toast.success("Expense recorded"); setOpen(false); },
@@ -116,7 +119,7 @@ function Expenses() {
       <div className="rounded-lg border bg-card"><Table>
         <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Category</TableHead><TableHead>Payee</TableHead><TableHead>Description</TableHead><TableHead className="text-right">Amount</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
-          {data.length === 0 ? <TableRow><TableCell colSpan={6}><EmptyState /></TableCell></TableRow> : data.map((e) => (
+          {data.length === 0 ? <TableRow><TableCell colSpan={6}><EmptyState /></TableCell></TableRow> : pagedExpenses.map((e) => (
             <TableRow key={e.id}>
               <TableCell>{e.spentOn}</TableCell>
               <TableCell>{e.category}</TableCell>
@@ -139,6 +142,7 @@ function Expenses() {
           ))}
         </TableBody>
       </Table></div>
+      <PaginationBar page={page} totalPages={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} />
       {editing && (
         <Dialog open onOpenChange={() => setEditing(null)}>
           <ExpenseForm initial={editing} onSubmit={(f: any) => update.mutate({ id: editing.id, ...f })} />
@@ -250,6 +254,8 @@ function Income() {
   })).filter((f) => f.total > 0);
 
   const filtersActive = classId || termId || academicYearId || pupilId;
+  const { pageItems: pagedVisible, page, setPage, totalPages, pageSize, total: visibleCount } =
+    usePagination(visible, 25, `${filter}-${classId}-${termId}-${academicYearId}-${pupilId}`);
 
   return (
     <div className="mt-4 space-y-3">
@@ -320,7 +326,7 @@ function Income() {
       <div className="rounded-lg border bg-card"><Table>
         <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Pupil</TableHead><TableHead>Class</TableHead><TableHead>Category</TableHead><TableHead>Method</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
         <TableBody>
-          {visible.length === 0 ? <TableRow><TableCell colSpan={6}><EmptyState /></TableCell></TableRow> : visible.map((r) => (
+          {visible.length === 0 ? <TableRow><TableCell colSpan={6}><EmptyState /></TableCell></TableRow> : pagedVisible.map((r) => (
             <TableRow key={r.id}>
               <TableCell>{r.paidOn}</TableCell>
               <TableCell>{r.pupilName}</TableCell>
@@ -332,6 +338,7 @@ function Income() {
           ))}
         </TableBody>
       </Table></div>
+      <PaginationBar page={page} totalPages={totalPages} total={visibleCount} pageSize={pageSize} onPageChange={setPage} />
     </div>
   );
 }

@@ -199,6 +199,7 @@ export const api = {
       create: (data: Partial<Invoice>) => post<Invoice>("/fees/invoices", data),
       bulkCreate: (data: Partial<Invoice>[]) => post<Invoice[]>("/fees/invoices/bulk", data),
       applyLateFees: () => post<Invoice[]>("/fees/invoices/apply-late-fees", {}),
+      delete: (id: string) => del(`/fees/invoices/${id}`),
     },
     payments: {
       list: (params?: { pupilId?: string; invoiceId?: string; classId?: string; grade?: string; termId?: string; academicYearId?: string }) =>
@@ -384,6 +385,7 @@ export const api = {
       create: (data: Partial<PayrollPeriod>) => post<PayrollPeriod>("/payroll/periods", data),
       approve: (id: string) => patch<PayrollPeriod>(`/payroll/periods/${id}/approve`),
       markPaid: (id: string) => patch<PayrollPeriod>(`/payroll/periods/${id}/mark-paid`),
+      delete: (id: string) => del(`/payroll/periods/${id}`),
     },
     payslips: {
       list: (periodId?: string, staffId?: string) =>
@@ -425,7 +427,7 @@ export const api = {
   communication: {
     messages: {
       list: () => get<Message[]>("/communication"),
-      send: (data: { body: string; subject?: string; channel?: string; audience?: string; classId?: string }) =>
+      send: (data: { body: string; subject?: string; channel?: string; audience?: string; classId?: string; recipientLabel?: string }) =>
         post<Message>("/communication", data),
     },
   },
@@ -439,6 +441,13 @@ export const api = {
   settings: {
     get: () => get<SchoolSettings>("/settings"),
     update: (data: Partial<SchoolSettings>) => put<SchoolSettings>("/settings", data),
+    updateDashboard: (data: { heroHeading?: string; heroSubtext?: string; heroImageUrl?: string; buttonLabel?: string; buttonUrl?: string; links?: string; loginButtonLabel?: string; loginButtonUrl?: string }) =>
+      put<SchoolSettings>("/settings/dashboard", data),
+  },
+
+  // Unauthenticated — used by the login page, which renders before any session exists.
+  public: {
+    branding: () => get<{ name: string; logoUrl?: string; motto?: string; loginButtonLabel?: string; loginButtonUrl?: string }>("/public/branding"),
   },
 
   users: {
@@ -580,9 +589,10 @@ export interface Supplier { id: string; name: string; contactPerson?: string; ph
 export interface PurchaseOrder { id: string; poNo?: string; supplier?: Supplier; orderDate: string; status: string; total: number; receivedAt?: string; }
 export interface PurchaseOrderItem { id: string; item: InventoryItem; quantity: number; unitCost: number; }
 export interface Expense { id: string; category: string; amount: number; payee?: string; description?: string; paymentMethod?: string; refNo?: string; spentOn: string; }
-export interface Message { id: string; body: string; subject?: string; channel: string; audience?: string; sentAt: string; recipientCount?: number; }
+export interface Message { id: string; body: string; subject?: string; channel: string; audience?: string; sentAt: string; recipientCount?: number; recipientLabel?: string; }
 export interface TimetableSlot { id: string; schoolClass: SchoolClass; classId?: string; subject?: Subject; subjectId?: string; teacher?: Staff; teacherId?: string; dayOfWeek: number; startTime: string; endTime: string; room?: string; }
-export interface SchoolSettings { id: number; name: string; motto?: string; address?: string; phone?: string; email?: string; website?: string; currency: string; logoUrl?: string; bannerUrl?: string; city?: string; province?: string; country?: string; postalCode?: string; poBox?: string; district?: string; plotNumber?: string; latitude?: number; longitude?: number; mapUrl?: string; establishedYear?: number; registrationNo?: string; tpin?: string; headTeacher?: string; headTeacherSignatureUrl?: string; deputyHead?: string; }
+export interface SchoolSettings { id: number; name: string; motto?: string; address?: string; phone?: string; email?: string; website?: string; currency: string; logoUrl?: string; bannerUrl?: string; city?: string; province?: string; country?: string; postalCode?: string; poBox?: string; district?: string; plotNumber?: string; latitude?: number; longitude?: number; mapUrl?: string; establishedYear?: number; registrationNo?: string; tpin?: string; headTeacher?: string; headTeacherSignatureUrl?: string; deputyHead?: string; dashboardHeroHeading?: string; dashboardHeroSubtext?: string; dashboardHeroImageUrl?: string; dashboardButtonLabel?: string; dashboardButtonUrl?: string; dashboardLinks?: string; loginButtonLabel?: string; loginButtonUrl?: string; }
+export interface DashboardLink { label: string; url: string; }
 export interface ReportCardRemark { id: string; pupil: Pupil; exam: Exam; classTeacherRemark?: string; headTeacherRemark?: string; }
 export interface AppUser { id: string; email: string; fullName?: string; roles: string[]; createdAt: string; mustChangePassword?: boolean; }
 export interface SchoolDocument { id: string; title: string; category?: string; description?: string; url: string; createdAt: string; }

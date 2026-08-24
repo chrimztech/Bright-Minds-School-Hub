@@ -93,7 +93,25 @@ function EventForm({ onSubmit }: any) {
         </div>
         <div><Label>Description</Label><Textarea value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></div>
       </div>
-      <DialogFooter><Button onClick={() => onSubmit({ ...f, endsAt: f.endsAt || undefined })} disabled={!f.title || !f.startsAt}>Save</Button></DialogFooter>
+      <DialogFooter>
+        <Button
+          onClick={() =>
+            onSubmit({
+              ...f,
+              // <input type="datetime-local"> yields a bare "YYYY-MM-DDTHH:mm" with no
+              // zone/offset, but the backend's Event.startsAt/endsAt are java.time.Instant —
+              // Jackson rejects anything without one (400 "request body could not be read").
+              // new Date(...) parses the bare string as browser-local time; toISOString()
+              // gives back a proper offset-bearing instant the backend can deserialize.
+              startsAt: new Date(f.startsAt).toISOString(),
+              endsAt: f.endsAt ? new Date(f.endsAt).toISOString() : undefined,
+            })
+          }
+          disabled={!f.title || !f.startsAt}
+        >
+          Save
+        </Button>
+      </DialogFooter>
     </DialogContent>
   );
 }
