@@ -41,8 +41,20 @@ function AuthedShell() {
     if (!loading && !user) navigate({ to: "/auth", replace: true });
   }, [user, loading, navigate]);
 
+  // Previously mustChangePassword only drove a one-time redirect right after login (see
+  // auth.tsx) — nothing stopped a user from later navigating straight to an authenticated
+  // page directly (a bookmarked URL, browser back/forward, or just re-opening the app with
+  // the flag still set from a stale session) and never actually changing the temporary
+  // password an admin reset for them. This re-checks on every route change, the same way the
+  // parent-only guard below does, so it can't be bypassed by navigating around it.
   useEffect(() => {
     if (!user || loading) return;
+    if (user.mustChangePassword) navigate({ to: "/change-password", replace: true });
+  }, [user, loading, pathname, navigate]);
+
+  useEffect(() => {
+    if (!user || loading) return;
+    if (user.mustChangePassword) return;
     const parentOnly = roles.length > 0 && roles.every((role) => role === "PARENT");
     // The dashboard (hero + announcements + configurable quick-links) is meant for every
     // logged-in user, parents included — it was missing from this allow-list, so a parent

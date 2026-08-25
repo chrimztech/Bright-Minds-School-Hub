@@ -253,6 +253,14 @@ aside ::-webkit-scrollbar-thumb:hover { background: oklch(0.40 0.06 258 / 0.9); 
 .animate-fade-in   { animation: fade-in  0.18s cubic-bezier(.4,0,.2,1) both; }
 .animate-scale-in  { animation: scale-in 0.18s cubic-bezier(.4,0,.2,1) both; }
 
+/* Gentle, slow bounce for the landing page's scroll-down hint — the default Tailwind
+   `animate-bounce` reads as playful/urgent, which doesn't fit a school marketing page. */
+@keyframes bounce-slow {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(6px); }
+}
+.animate-bounce-slow { animation: bounce-slow 2.2s ease-in-out infinite; }
+
 /* Staggered children (apply to container, children get the delay) */
 .stagger > * { animation: fade-up 0.22s cubic-bezier(.4,0,.2,1) both; }
 .stagger > *:nth-child(1)  { animation-delay: 0ms;   }

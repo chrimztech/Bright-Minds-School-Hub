@@ -5,6 +5,7 @@ import {
   LogOut, Megaphone, ScrollText, UserPlus, Library, Bus, HeartPulse,
   Shield, Boxes, Receipt, Briefcase, ClipboardList, FolderOpen, DatabaseBackup,
   UtensilsCrossed, BarChart3, Mail, FileSignature, History, Handshake, ChevronRight, X, ArrowUpCircle,
+  Inbox,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth, hasPermission } from "@/lib/auth";
@@ -76,6 +77,7 @@ const GROUPS: NavGroup[] = [
       { to: "/communication", label: "Messaging", icon: Mail, permission: "communication:manage" },
       { to: "/announcements", label: "Announcements", icon: Megaphone },
       { to: "/documents", label: "Documents", icon: FolderOpen, permission: ["documents:view", "documents:manage"] },
+      { to: "/inquiries", label: "Inquiries", icon: Inbox, permission: ["inquiries:view", "inquiries:manage"] },
     ],
   },
   {

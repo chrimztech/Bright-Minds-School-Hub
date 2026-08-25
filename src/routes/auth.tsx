@@ -1,7 +1,17 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, Eye, EyeOff, ExternalLink, Lock, Mail, ShieldCheck, Sparkles } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Eye,
+  EyeOff,
+  ExternalLink,
+  Lock,
+  Mail,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -15,7 +25,14 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
-const capabilities = ["Attendance", "Fees & billing", "Exams & marks", "Payroll", "Library", "Transport"];
+const capabilities = [
+  "Attendance",
+  "Fees & billing",
+  "Exams & marks",
+  "Payroll",
+  "Library",
+  "Transport",
+];
 
 function AuthPage() {
   const { user, loading, login } = useAuth();
@@ -26,7 +43,10 @@ function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
   // Public, unauthenticated endpoint — superadmin-configured via the Dashboard editor,
   // rendered here so a school can link out (website, admissions, etc.) before anyone logs in.
-  const { data: branding } = useQuery({ queryKey: ["public-branding"], queryFn: () => api.public.branding() });
+  const { data: branding } = useQuery({
+    queryKey: ["public-branding"],
+    queryFn: () => api.public.branding(),
+  });
 
   useEffect(() => {
     if (!loading && user) navigate({ to: "/dashboard", replace: true });
@@ -61,9 +81,18 @@ function AuthPage() {
         <div className="pointer-events-none absolute left-[12%] top-[22%] h-px w-[76%] bg-gradient-to-r from-transparent via-white/8 to-transparent" />
 
         <div className="relative flex h-full flex-col px-10 py-8 xl:px-16 xl:py-10">
-          <div className="flex items-center gap-2 text-[9px] font-extrabold uppercase tracking-[0.22em] text-brand-gold/75">
-            <span className="h-px w-7 bg-brand-gold/65" />
-            School Management Suite
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-[9px] font-extrabold uppercase tracking-[0.22em] text-brand-gold/75">
+              <span className="h-px w-7 bg-brand-gold/65" />
+              School Management Suite
+            </div>
+            <Link
+              to="/"
+              className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-white/60 transition-colors hover:text-white"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back to website
+            </Link>
           </div>
 
           <div className="flex flex-1 flex-col items-center justify-center gap-7 pb-6 text-center">
@@ -124,6 +153,18 @@ function AuthPage() {
 
       <section className="auth-panel flex flex-1 items-center justify-center p-5 sm:p-8 lg:p-12">
         <div className="w-full max-w-[440px] animate-fade-up">
+          <div className="mb-6 inline-flex rounded-full border border-border/70 bg-muted/40 p-1">
+            <span className="rounded-full bg-card px-4 py-1.5 text-xs font-semibold text-foreground shadow-sm">
+              Sign in
+            </span>
+            <Link
+              to="/"
+              className="rounded-full px-4 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Website
+            </Link>
+          </div>
+
           <div className="mb-8 flex items-center justify-between">
             <div className="inline-flex items-center gap-2 rounded-full border border-primary/10 bg-primary/6 px-3 py-1.5 text-[9.5px] font-extrabold uppercase tracking-[0.15em] text-primary">
               <Sparkles className="h-3.5 w-3.5 text-brand-gold" />
@@ -140,10 +181,16 @@ function AuthPage() {
 
           <div className="mb-7 flex items-center gap-4 lg:hidden">
             <div className="h-16 w-16 overflow-hidden rounded-2xl border border-border bg-white p-1 shadow-depth">
-              <img src="/logo.png" alt="Chaz Crestview Academy" className="h-full w-full object-contain" />
+              <img
+                src="/logo.png"
+                alt="Chaz Crestview Academy"
+                className="h-full w-full object-contain"
+              />
             </div>
             <div>
-              <p className="text-sm font-extrabold tracking-[0.05em] text-foreground">CHAZ CRESTVIEW</p>
+              <p className="text-sm font-extrabold tracking-[0.05em] text-foreground">
+                CHAZ CRESTVIEW
+              </p>
               <p className="text-sm font-extrabold tracking-[0.05em] text-foreground">ACADEMY</p>
               <p className="mt-1 text-[8.5px] font-bold uppercase tracking-[0.2em] text-brand-gold">
                 For Premium Education
@@ -183,9 +230,17 @@ function AuthPage() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-[11px] font-bold uppercase tracking-[0.08em] text-foreground/75">
-                Password
-              </Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-[11px] font-bold uppercase tracking-[0.08em] text-foreground/75">
+                  Password
+                </Label>
+                <Link
+                  to="/forgot-password"
+                  className="text-[11px] font-semibold text-primary hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/65" />
                 <Input

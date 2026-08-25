@@ -5,7 +5,7 @@ import { api, type DashboardLink } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useSchool } from "@/components/PrintableDoc";
 import { PageHeader } from "@/components/PageHeader";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ImageUploadField } from "@/components/ImageUploadField";
-import { Megaphone, ArrowUpRight, Pencil, Plus, Trash2, Link2 } from "lucide-react";
+import {
+  Activity, ArrowUpRight, BookOpen, CheckCircle2, Clock3, GraduationCap,
+  Link2, Megaphone, Pencil, Plus, ShieldCheck, Trash2, Users2,
+} from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -50,6 +53,10 @@ function Dashboard() {
     queryKey: ["ann"],
     queryFn: () => api.announcements.list(),
   });
+  const { data: metrics, isLoading: metricsLoading } = useQuery({
+    queryKey: ["dashboard-metrics"],
+    queryFn: () => api.dashboard.get(),
+  });
 
   const firstName = (user?.fullName || user?.email || "").split(/[ @]/)[0];
   const heroImage = school?.dashboardHeroImageUrl || school?.bannerUrl;
@@ -59,10 +66,16 @@ function Dashboard() {
     <>
       <PageHeader
         title="Dashboard"
-        actions={isSuperAdmin ? <DashboardEditor school={school} /> : undefined}
+        description={`A clear view of ${school?.name ?? "your school"}'s activity, people and priorities.`}
+        actions={isSuperAdmin ? (
+          <>
+            <LandingEditor school={school} />
+            <DashboardEditor school={school} />
+          </>
+        ) : undefined}
       />
 
-      <div className="space-y-6 p-4 sm:p-6 lg:px-8 lg:pb-8 max-w-4xl mx-auto">
+      <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:px-8 lg:pb-8">
         {/* Welcome hero */}
         <div
           className="relative overflow-hidden rounded-3xl border border-white/10 shadow-depth-lg"
@@ -79,11 +92,11 @@ function Dashboard() {
           <div className="pointer-events-none absolute top-[-30%] right-[-5%] h-64 w-64 rounded-full bg-blue-500/20 blur-3xl" />
           <div className="pointer-events-none absolute bottom-[-30%] left-[10%] h-48 w-48 rounded-full bg-brand-gold/18 blur-3xl" />
 
-          <div className="relative px-7 py-8 flex flex-col sm:flex-row sm:items-center gap-5">
+          <div className="relative flex flex-col gap-6 px-7 py-8 sm:flex-row sm:items-center sm:justify-between">
             {school?.logoUrl && (
               <img src={school.logoUrl} alt="" className="h-16 w-16 rounded-2xl object-contain bg-white/10 p-1.5 border border-white/15 shrink-0" />
             )}
-            <div>
+            <div className="min-w-0">
               <p className="text-white/45 text-[10.5px] uppercase tracking-[0.2em] font-semibold mb-2">
                 {TODAY_LONG}
               </p>
@@ -104,8 +117,39 @@ function Dashboard() {
                 </a>
               )}
             </div>
+            <div className="hidden shrink-0 border-l border-white/10 pl-8 text-right sm:block">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">Workspace status</p>
+              <div className="mt-3 flex items-center justify-end gap-2 text-sm font-medium text-white/80">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_12px_oklch(0.75_0.17_155/0.8)]" />
+                All systems operational
+              </div>
+              <p className="mt-1 text-xs text-white/40">Live school overview</p>
+            </div>
           </div>
         </div>
+
+        <section aria-label="School metrics" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            { label: "Total pupils", value: metrics?.totalPupils, icon: Users2, tone: "text-primary", bg: "bg-primary/10" },
+            { label: "Active staff", value: metrics?.activeStaff, icon: GraduationCap, tone: "text-sky-600", bg: "bg-sky-500/10" },
+            { label: "Classes", value: metrics?.totalClasses, icon: BookOpen, tone: "text-violet-600", bg: "bg-violet-500/10" },
+            { label: "Present today", value: metrics?.presentToday, icon: CheckCircle2, tone: "text-emerald-600", bg: "bg-emerald-500/10" },
+          ].map((metric) => (
+            <Card key={metric.label} className="relative overflow-hidden transition-shadow hover:shadow-depth">
+              <CardContent className="flex items-center gap-3 p-4 sm:p-5">
+                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${metric.bg} ${metric.tone}`}>
+                  <metric.icon className="h-4.5 w-4.5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{metric.label}</p>
+                  <p className="mt-1 font-display text-2xl font-semibold leading-none text-foreground">
+                    {metricsLoading ? <Skeleton className="h-6 w-16" /> : (metric.value ?? 0).toLocaleString()}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </section>
 
         {/* Optional hero photo — set via the dashboard editor (superadmin) or Settings banner */}
         {heroImage && (
@@ -135,6 +179,7 @@ function Dashboard() {
           </div>
         )}
 
+        <div className="grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">
         {/* Announcements */}
         <Card className="overflow-hidden">
           <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
@@ -142,7 +187,7 @@ function Dashboard() {
               <div className="rounded-lg bg-orange-500/10 p-1.5">
                 <Megaphone className="h-4 w-4 text-orange-600" />
               </div>
-              Announcements
+              <span>Announcements</span>
             </CardTitle>
             <Link
               to="/announcements"
@@ -200,9 +245,151 @@ function Dashboard() {
             )}
           </CardContent>
         </Card>
+
+        <Card className="overflow-hidden">
+          <CardHeader className="border-b border-border/50 pb-4">
+            <CardTitle className="flex items-center gap-2 text-[15px]">
+              <div className="rounded-lg bg-emerald-500/10 p-1.5"><Activity className="h-4 w-4 text-emerald-600" /></div>
+              Daily pulse
+            </CardTitle>
+            <CardDescription>Attendance snapshot for today</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6 pt-6">
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <p className="font-display text-4xl font-semibold text-foreground">
+                  {metricsLoading ? "—" : metrics?.totalPupils ? `${Math.round((metrics.presentToday / metrics.totalPupils) * 100)}%` : "0%"}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">Pupil attendance</p>
+              </div>
+              <div className="rounded-xl bg-emerald-500/10 px-3 py-2 text-right text-xs font-semibold text-emerald-700">
+                {metrics?.presentToday ?? 0} present
+              </div>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-emerald-500 transition-all duration-1000"
+                style={{ width: `${metrics?.totalPupils ? Math.min(100, (metrics.presentToday / metrics.totalPupils) * 100) : 0}%` }}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3 border-t border-border/50 pt-5">
+              <div className="flex items-center gap-2"><Clock3 className="h-4 w-4 text-muted-foreground" /><span className="text-xs text-muted-foreground">Updated today</span></div>
+              <div className="flex items-center justify-end gap-2"><ShieldCheck className="h-4 w-4 text-primary" /><span className="text-xs font-medium text-foreground">Live data</span></div>
+            </div>
+          </CardContent>
+        </Card>
+        </div>
       </div>
     </>
   );
+}
+
+// Superadmin-only editor for the public landing page ("/", before Sign in) — hero image
+// carousel, heading/subtext override, and the About section. Same SUPER_ADMIN-hardcoded
+// rationale as DashboardEditor below: this is public-facing branding, not something a
+// delegated role should be able to touch via Roles & Permissions.
+function LandingEditor({ school }: { school?: { landingHeroHeading?: string; landingHeroSubtext?: string; landingHeroImages?: string; landingAboutTitle?: string; landingAboutBody?: string } }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [heroHeading, setHeroHeading] = useState("");
+  const [heroSubtext, setHeroSubtext] = useState("");
+  const [images, setImages] = useState<string[]>([]);
+  const [aboutTitle, setAboutTitle] = useState("");
+  const [aboutBody, setAboutBody] = useState("");
+
+  function openEditor() {
+    setHeroHeading(school?.landingHeroHeading ?? "");
+    setHeroSubtext(school?.landingHeroSubtext ?? "");
+    setImages(parseImages(school?.landingHeroImages));
+    setAboutTitle(school?.landingAboutTitle ?? "");
+    setAboutBody(school?.landingAboutBody ?? "");
+    setOpen(true);
+  }
+
+  const save = useMutation({
+    mutationFn: () =>
+      api.settings.updateLanding({
+        heroHeading: heroHeading || undefined,
+        heroSubtext: heroSubtext || undefined,
+        heroImages: JSON.stringify(images.filter(Boolean)),
+        aboutTitle: aboutTitle || undefined,
+        aboutBody: aboutBody || undefined,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["school-settings-print"] });
+      // The public landing page ("/") reads from its own query key, not
+      // school-settings-print — without this, edits here (including deleting a hero
+      // image) keep showing the stale version on "/" until a hard reload clears the cache.
+      qc.invalidateQueries({ queryKey: ["public-landing"] });
+      toast.success("Landing page updated");
+      setOpen(false);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (o) openEditor(); else setOpen(false); }}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm"><Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit landing page</Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogHeader><DialogTitle>Edit public landing page</DialogTitle></DialogHeader>
+        <div className="space-y-4">
+          <div className="pt-1">
+            <div className="flex items-center justify-between mb-2">
+              <Label>Hero images</Label>
+              <Button type="button" size="sm" variant="outline" onClick={() => setImages((prev) => [...prev, ""])}>
+                <Plus className="h-3.5 w-3.5 mr-1" /> Add image
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mb-2">Shown as a rotating background on the sign-in landing page. Add more than one for a slideshow.</p>
+            <div className="space-y-2">
+              {images.map((url, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <ImageUploadField value={url} onChange={(u) => setImages((prev) => prev.map((v, idx) => (idx === i ? u : v)))} />
+                  </div>
+                  <Button type="button" size="icon" variant="ghost" onClick={() => setImages((prev) => prev.filter((_, idx) => idx !== i))}>
+                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                  </Button>
+                </div>
+              ))}
+              {images.length === 0 && <p className="text-xs text-muted-foreground">No hero images yet — a default gradient background is used.</p>}
+            </div>
+          </div>
+          <div>
+            <Label>Hero heading</Label>
+            <Input placeholder="Leave blank for the default welcome heading" value={heroHeading} onChange={(e) => setHeroHeading(e.target.value)} />
+          </div>
+          <div>
+            <Label>Hero subtext</Label>
+            <Textarea rows={2} placeholder="Leave blank for the default subtext" value={heroSubtext} onChange={(e) => setHeroSubtext(e.target.value)} />
+          </div>
+          <div className="pt-2 border-t">
+            <Label>About section title</Label>
+            <Input placeholder={`Leave blank for "About <school name>"`} value={aboutTitle} onChange={(e) => setAboutTitle(e.target.value)} />
+          </div>
+          <div>
+            <Label>About section body</Label>
+            <Textarea rows={4} placeholder="Leave blank for the default description" value={aboutBody} onChange={(e) => setAboutBody(e.target.value)} />
+          </div>
+          <Button className="w-full" disabled={save.isPending} onClick={() => save.mutate()}>
+            {save.isPending ? "Saving…" : "Save landing page"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function parseImages(raw?: string): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((u) => typeof u === "string") : [];
+  } catch {
+    return [];
+  }
 }
 
 // Superadmin-only dashboard content editor. Deliberately hardcoded to the SUPER_ADMIN role

@@ -8,6 +8,7 @@ type AuthCtx = {
   permissions: string[];
   login: (identifier: string, password: string) => Promise<{ mustChangePassword: boolean }>;
   signOut: () => void;
+  clearMustChangePassword: () => void;
 };
 
 const Ctx = createContext<AuthCtx>({
@@ -17,6 +18,7 @@ const Ctx = createContext<AuthCtx>({
   permissions: [],
   login: async () => ({ mustChangePassword: false }),
   signOut: () => {},
+  clearMustChangePassword: () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -51,8 +53,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  // The _authenticated layout guard redirects to /change-password on every navigation while
+  // this flag is true (see route.tsx) — without a way to flip it locally right after a
+  // successful change, the very next navigate("/dashboard") in change-password.tsx would read
+  // the still-stale stored flag and bounce straight back, trapping the user in a redirect loop.
+  const clearMustChangePassword = useCallback(() => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, mustChangePassword: false };
+      setStoredUser(updated);
+      return updated;
+    });
+  }, []);
+
   return (
-    <Ctx.Provider value={{ user, loading, roles: user?.roles ?? [], permissions: user?.permissions ?? [], login, signOut } as AuthCtx}>
+    <Ctx.Provider value={{ user, loading, roles: user?.roles ?? [], permissions: user?.permissions ?? [], login, signOut, clearMustChangePassword } as AuthCtx}>
       {children}
     </Ctx.Provider>
   );

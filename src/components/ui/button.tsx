@@ -41,9 +41,14 @@ export interface ButtonProps
 // disable via `mutation.isPending`, but that flips one render tick after the click, not
 // synchronously) was letting an impatient second click fire the same create mutation twice —
 // duplicate pupils, duplicate payments, etc. This is a same-tick guard against exactly that:
-// it blocks a second click within 600ms of the first, independent of whichever `disabled`
-// condition (if any) a given call site wires up itself.
-const DOUBLE_CLICK_GUARD_MS = 600;
+// it blocks a second click within this window of the first, independent of whichever
+// `disabled` condition (if any) a given call site wires up itself.
+// Kept short deliberately: a genuine accidental double-click (double-firing mouse event, or
+// a habitual double-click reflex) lands well under 300ms between the two events, but a form
+// with a repeatable "Add row" button (add another quick link, another hero image, …) is a
+// legitimate rapid-fire interaction — a longer window silently ate the second, third, … click
+// with no feedback, which looked like the button had quietly stopped working.
+const DOUBLE_CLICK_GUARD_MS = 350;
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, onClick, ...props }, ref) => {

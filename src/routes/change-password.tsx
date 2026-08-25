@@ -16,7 +16,7 @@ export const Route = createFileRoute("/change-password")({
 });
 
 function ChangePasswordPage() {
-  const { user, loading } = useAuth();
+  const { user, loading, clearMustChangePassword } = useAuth();
   const navigate = useNavigate();
   const [pw, setPw] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -34,6 +34,7 @@ function ChangePasswordPage() {
     setBusy(true);
     try {
       await api.auth.changePassword(pw);
+      clearMustChangePassword();
       toast.success("Password updated");
       navigate({ to: "/dashboard", replace: true });
     } catch (err: any) {

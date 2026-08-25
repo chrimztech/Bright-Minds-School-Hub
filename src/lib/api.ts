@@ -36,7 +36,7 @@ async function request<T>(
   method: string,
   path: string,
   body?: unknown,
-  params?: Record<string, string | number | boolean | undefined>
+  params?: Record<string, string | number | boolean | undefined>,
 ): Promise<T> {
   const token = getToken();
   const url = new URL(BASE_URL + path, window.location.origin);
@@ -62,8 +62,11 @@ async function request<T>(
     e.status = res.status;
     throw e;
   }
-  if (res.status === 204) return undefined as T;
-  return res.json();
+  // Void endpoints (@PostMapping with no return value) come back as 200 with an empty
+  // body just as often as 204 — res.json() throws a SyntaxError on an empty body, which
+  // silently broke forgot/reset-password and the admin reset-password action.
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
 }
 
 const get = <T>(path: string, params?: Record<string, string | number | boolean | undefined>) =>
@@ -98,8 +101,7 @@ export const api = {
       post<AuthUser & { token: string }>("/auth/login", { identifier, password }),
     register: (data: { email: string; password: string; fullName: string; roles?: string[] }) =>
       post<AuthUser & { token: string }>("/auth/register", data),
-    changePassword: (password: string) =>
-      post<void>("/auth/change-password", { password }),
+    changePassword: (password: string) => post<void>("/auth/change-password", { password }),
   },
 
   dashboard: {
@@ -111,7 +113,8 @@ export const api = {
   },
 
   pupils: {
-    list: (q?: string, page = 0, size = 50) => get<PageResponse<Pupil>>("/pupils", { q, page, size }),
+    list: (q?: string, page = 0, size = 50) =>
+      get<PageResponse<Pupil>>("/pupils", { q, page, size }),
     all: () => get<Pupil[]>("/pupils/all"),
     byClass: (classId: string) => get<Pupil[]>(`/pupils/class/${classId}`),
     get: (id: string) => get<Pupil>(`/pupils/${id}`),
@@ -121,7 +124,8 @@ export const api = {
   },
 
   staff: {
-    list: (q?: string, page = 0, size = 50) => get<PageResponse<Staff>>("/staff", { q, page, size }),
+    list: (q?: string, page = 0, size = 50) =>
+      get<PageResponse<Staff>>("/staff", { q, page, size }),
     all: () => get<Staff[]>("/staff/all"),
     teachers: () => get<Staff[]>("/staff/teachers"),
     me: () => get<Staff | null>("/staff/me"),
@@ -145,7 +149,8 @@ export const api = {
   subjects: {
     list: () => get<Subject[]>("/subjects"),
     create: (data: { name: string; code?: string }) => post<Subject>("/subjects", data),
-    update: (id: string, data: { name: string; code?: string }) => put<Subject>(`/subjects/${id}`, data),
+    update: (id: string, data: { name: string; code?: string }) =>
+      put<Subject>(`/subjects/${id}`, data),
     delete: (id: string) => del(`/subjects/${id}`),
   },
 
@@ -156,7 +161,8 @@ export const api = {
     terms: {
       list: (yearId: string) => get<Term[]>(`/academic-years/${yearId}/terms`),
       all: () => get<Term[]>("/academic-years/terms"),
-      create: (yearId: string, data: Partial<Term>) => post<Term>(`/academic-years/${yearId}/terms`, data),
+      create: (yearId: string, data: Partial<Term>) =>
+        post<Term>(`/academic-years/${yearId}/terms`, data),
       delete: (id: string) => del(`/academic-years/terms/${id}`),
     },
   },
@@ -180,8 +186,10 @@ export const api = {
     delete: (id: string) => del(`/exams/${id}`),
     marks: {
       list: (examId: string) => get<Mark[]>(`/exams/${examId}/marks`),
-      save: (examId: string, data: { pupilId: string; subjectId: string; score: number; comment?: string }) =>
-        post<Mark>(`/exams/${examId}/marks`, data),
+      save: (
+        examId: string,
+        data: { pupilId: string; subjectId: string; score: number; comment?: string },
+      ) => post<Mark>(`/exams/${examId}/marks`, data),
     },
   },
 
@@ -202,21 +210,30 @@ export const api = {
       delete: (id: string) => del(`/fees/invoices/${id}`),
     },
     payments: {
-      list: (params?: { pupilId?: string; invoiceId?: string; classId?: string; grade?: string; termId?: string; academicYearId?: string }) =>
-        get<Payment[]>("/fees/payments", params),
+      list: (params?: {
+        pupilId?: string;
+        invoiceId?: string;
+        classId?: string;
+        grade?: string;
+        termId?: string;
+        academicYearId?: string;
+      }) => get<Payment[]>("/fees/payments", params),
       create: (data: Partial<Payment>) => post<Payment>("/fees/payments", data),
       update: (id: string, data: Partial<Payment>) => put<Payment>(`/fees/payments/${id}`, data),
       delete: (id: string) => del(`/fees/payments/${id}`),
       pending: () => get<Payment[]>("/fees/payments/pending"),
       confirm: (id: string) => patch<Payment>(`/fees/payments/${id}/confirm`),
-      reject: (id: string, reason?: string) => patch<Payment>(`/fees/payments/${id}/reject`, { reason }),
+      reject: (id: string, reason?: string) =>
+        patch<Payment>(`/fees/payments/${id}/reject`, { reason }),
     },
   },
 
   announcements: {
     list: () => get<Announcement[]>("/announcements"),
-    create: (data: { title: string; body: string; audience?: string }) => post<Announcement>("/announcements", data),
-    update: (id: string, data: Partial<Announcement>) => put<Announcement>(`/announcements/${id}`, data),
+    create: (data: { title: string; body: string; audience?: string }) =>
+      post<Announcement>("/announcements", data),
+    update: (id: string, data: Partial<Announcement>) =>
+      put<Announcement>(`/announcements/${id}`, data),
     delete: (id: string) => del(`/announcements/${id}`),
   },
 
@@ -241,7 +258,8 @@ export const api = {
     update: (id: string, data: Partial<Admission>) => put<Admission>(`/admissions/${id}`, data),
     updateStatus: (id: string, status: string) =>
       patch<Admission>(`/admissions/${id}/status?status=${status}`),
-    enroll: (id: string, classId?: string) => post<Pupil>(`/admissions/${id}/enroll`, classId ? { classId } : undefined),
+    enroll: (id: string, classId?: string) =>
+      post<Pupil>(`/admissions/${id}/enroll`, classId ? { classId } : undefined),
     delete: (id: string) => del(`/admissions/${id}`),
   },
 
@@ -255,9 +273,14 @@ export const api = {
     myPupils: () => get<Pupil[]>("/guardians/me/pupils"),
     myInvoices: () => get<Invoice[]>("/guardians/me/invoices"),
     myPaymentClaims: () => get<Payment[]>("/guardians/me/payments"),
-    submitPayment: (data: { invoiceId: string; amount: number; method?: string; reference?: string }) =>
-      post<Payment>("/guardians/me/payments", data),
-    myAttendance: (from: string, to: string) => get<Attendance[]>("/guardians/me/attendance", { from, to }),
+    submitPayment: (data: {
+      invoiceId: string;
+      amount: number;
+      method?: string;
+      reference?: string;
+    }) => post<Payment>("/guardians/me/payments", data),
+    myAttendance: (from: string, to: string) =>
+      get<Attendance[]>("/guardians/me/attendance", { from, to }),
     myMarks: (examId: string) => get<Mark[]>("/guardians/me/marks", { examId }),
     childAttendance: (pupilId: string, from: string, to: string) =>
       get<Attendance[]>(`/guardians/me/pupils/${pupilId}/attendance`, { from, to }),
@@ -297,7 +320,8 @@ export const api = {
       list: (q?: string) => get<LibraryBook[]>("/library/books", { q }),
       get: (id: string) => get<LibraryBook>(`/library/books/${id}`),
       create: (data: Partial<LibraryBook>) => post<LibraryBook>("/library/books", data),
-      update: (id: string, data: Partial<LibraryBook>) => put<LibraryBook>(`/library/books/${id}`, data),
+      update: (id: string, data: Partial<LibraryBook>) =>
+        put<LibraryBook>(`/library/books/${id}`, data),
       delete: (id: string) => del(`/library/books/${id}`),
     },
     loans: {
@@ -312,7 +336,8 @@ export const api = {
       list: () => get<InventoryItem[]>("/inventory/items"),
       lowStock: () => get<InventoryItem[]>("/inventory/items/low-stock"),
       create: (data: Partial<InventoryItem>) => post<InventoryItem>("/inventory/items", data),
-      update: (id: string, data: Partial<InventoryItem>) => put<InventoryItem>(`/inventory/items/${id}`, data),
+      update: (id: string, data: Partial<InventoryItem>) =>
+        put<InventoryItem>(`/inventory/items/${id}`, data),
       delete: (id: string) => del(`/inventory/items/${id}`),
     },
     transactions: {
@@ -340,8 +365,12 @@ export const api = {
     },
     assignments: {
       list: (routeId?: string) => get<TransportAssignment[]>("/transport/assignments", { routeId }),
-      create: (data: { pupilId: string; routeId: string; pickupPointId?: string; pickupPoint?: string }) =>
-        post<TransportAssignment>("/transport/assignments", data),
+      create: (data: {
+        pupilId: string;
+        routeId: string;
+        pickupPointId?: string;
+        pickupPoint?: string;
+      }) => post<TransportAssignment>("/transport/assignments", data),
       delete: (id: string) => del(`/transport/assignments/${id}`),
     },
   },
@@ -350,7 +379,8 @@ export const api = {
     menu: {
       list: () => get<CanteenMenuItem[]>("/canteen/menu"),
       create: (data: Partial<CanteenMenuItem>) => post<CanteenMenuItem>("/canteen/menu", data),
-      update: (id: string, data: Partial<CanteenMenuItem>) => put<CanteenMenuItem>(`/canteen/menu/${id}`, data),
+      update: (id: string, data: Partial<CanteenMenuItem>) =>
+        put<CanteenMenuItem>(`/canteen/menu/${id}`, data),
       delete: (id: string) => del(`/canteen/menu/${id}`),
     },
     plans: {
@@ -400,14 +430,18 @@ export const api = {
     suppliers: {
       list: () => get<Supplier[]>("/procurement/suppliers"),
       create: (data: Partial<Supplier>) => post<Supplier>("/procurement/suppliers", data),
-      update: (id: string, data: Partial<Supplier>) => put<Supplier>(`/procurement/suppliers/${id}`, data),
+      update: (id: string, data: Partial<Supplier>) =>
+        put<Supplier>(`/procurement/suppliers/${id}`, data),
       delete: (id: string) => del(`/procurement/suppliers/${id}`),
     },
     orders: {
       list: () => get<PurchaseOrder[]>("/procurement/orders"),
       items: (id: string) => get<PurchaseOrderItem[]>(`/procurement/orders/${id}/items`),
-      create: (data: Partial<PurchaseOrder> & { items?: { itemId: string; quantity: number; unitCost?: number }[] }) =>
-        post<PurchaseOrder>("/procurement/orders", data),
+      create: (
+        data: Partial<PurchaseOrder> & {
+          items?: { itemId: string; quantity: number; unitCost?: number }[];
+        },
+      ) => post<PurchaseOrder>("/procurement/orders", data),
       updateStatus: (id: string, status: string) =>
         patch<PurchaseOrder>(`/procurement/orders/${id}/status?status=${status}`),
       receive: (id: string) => post<PurchaseOrder>(`/procurement/orders/${id}/receive`),
@@ -419,7 +453,8 @@ export const api = {
     expenses: {
       list: (from?: string, to?: string) => get<Expense[]>("/accounts/expenses", { from, to }),
       create: (data: Partial<Expense>) => post<Expense>("/accounts/expenses", data),
-      update: (id: string, data: Partial<Expense>) => put<Expense>(`/accounts/expenses/${id}`, data),
+      update: (id: string, data: Partial<Expense>) =>
+        put<Expense>(`/accounts/expenses/${id}`, data),
       delete: (id: string) => del(`/accounts/expenses/${id}`),
     },
   },
@@ -427,8 +462,14 @@ export const api = {
   communication: {
     messages: {
       list: () => get<Message[]>("/communication"),
-      send: (data: { body: string; subject?: string; channel?: string; audience?: string; classId?: string; recipientLabel?: string }) =>
-        post<Message>("/communication", data),
+      send: (data: {
+        body: string;
+        subject?: string;
+        channel?: string;
+        audience?: string;
+        classId?: string;
+        recipientLabel?: string;
+      }) => post<Message>("/communication", data),
     },
   },
 
@@ -441,13 +482,48 @@ export const api = {
   settings: {
     get: () => get<SchoolSettings>("/settings"),
     update: (data: Partial<SchoolSettings>) => put<SchoolSettings>("/settings", data),
-    updateDashboard: (data: { heroHeading?: string; heroSubtext?: string; heroImageUrl?: string; buttonLabel?: string; buttonUrl?: string; links?: string; loginButtonLabel?: string; loginButtonUrl?: string }) =>
-      put<SchoolSettings>("/settings/dashboard", data),
+    updateDashboard: (data: {
+      heroHeading?: string;
+      heroSubtext?: string;
+      heroImageUrl?: string;
+      buttonLabel?: string;
+      buttonUrl?: string;
+      links?: string;
+      loginButtonLabel?: string;
+      loginButtonUrl?: string;
+    }) => put<SchoolSettings>("/settings/dashboard", data),
+    updateLanding: (data: {
+      heroHeading?: string;
+      heroSubtext?: string;
+      heroImages?: string;
+      aboutTitle?: string;
+      aboutBody?: string;
+    }) => put<SchoolSettings>("/settings/landing", data),
   },
 
-  // Unauthenticated — used by the login page, which renders before any session exists.
+  // Unauthenticated — used by the login page and the public landing page, both of which
+  // render before any session exists.
   public: {
-    branding: () => get<{ name: string; logoUrl?: string; motto?: string; loginButtonLabel?: string; loginButtonUrl?: string }>("/public/branding"),
+    branding: () =>
+      get<{
+        name: string;
+        logoUrl?: string;
+        motto?: string;
+        loginButtonLabel?: string;
+        loginButtonUrl?: string;
+      }>("/public/branding"),
+    landing: () => get<PublicLanding>("/public/landing"),
+    submitInquiry: (data: { fullName: string; email?: string; phone?: string; message: string }) =>
+      post<Inquiry>("/public/inquiries", data),
+    forgotPassword: (email: string) => post<void>("/public/forgot-password", { email }),
+    resetPassword: (token: string, password: string) =>
+      post<void>("/public/reset-password", { token, password }),
+  },
+
+  inquiries: {
+    list: () => get<Inquiry[]>("/inquiries"),
+    markRead: (id: string) => patch<Inquiry>(`/inquiries/${id}/read`),
+    delete: (id: string) => del(`/inquiries/${id}`),
   },
 
   users: {
@@ -472,9 +548,14 @@ export const api = {
   },
 
   reportCardRemarks: {
-    get: (pupilId: string, examId: string) => get<ReportCardRemark | null>("/report-cards/remarks", { pupilId, examId }),
-    save: (data: { pupilId: string; examId: string; classTeacherRemark?: string; headTeacherRemark?: string }) =>
-      put<ReportCardRemark>("/report-cards/remarks", data),
+    get: (pupilId: string, examId: string) =>
+      get<ReportCardRemark | null>("/report-cards/remarks", { pupilId, examId }),
+    save: (data: {
+      pupilId: string;
+      examId: string;
+      classTeacherRemark?: string;
+      headTeacherRemark?: string;
+    }) => put<ReportCardRemark>("/report-cards/remarks", data),
   },
 
   admin: {
@@ -496,13 +577,17 @@ export const api = {
 
   roles: {
     list: () => get<SystemRole[]>("/admin/roles"),
-    create: (data: { name: string; description?: string }) => post<SystemRole>("/admin/roles", data),
-    update: (id: string, data: { description?: string }) => put<SystemRole>(`/admin/roles/${id}`, data),
+    create: (data: { name: string; description?: string }) =>
+      post<SystemRole>("/admin/roles", data),
+    update: (id: string, data: { description?: string }) =>
+      put<SystemRole>(`/admin/roles/${id}`, data),
     delete: (id: string) => del(`/admin/roles/${id}`),
-    setPermissions: (id: string, permissionIds: string[]) => put<SystemRole>(`/admin/roles/${id}/permissions`, permissionIds),
+    setPermissions: (id: string, permissionIds: string[]) =>
+      put<SystemRole>(`/admin/roles/${id}/permissions`, permissionIds),
     permissions: {
       list: () => get<SystemPermission[]>("/admin/roles/permissions"),
-      create: (data: { name: string; description?: string; module?: string }) => post<SystemPermission>("/admin/roles/permissions", data),
+      create: (data: { name: string; description?: string; module?: string }) =>
+        post<SystemPermission>("/admin/roles/permissions", data),
       delete: (id: string) => del(`/admin/roles/permissions/${id}`),
     },
   },
@@ -515,90 +600,730 @@ export const api = {
   ptc: {
     sessions: {
       list: () => get<PtcSession[]>("/ptc/sessions"),
-      create: (data: Partial<PtcSession> & { termId?: string }) => post<PtcSession>("/ptc/sessions", data),
-      update: (id: string, data: Partial<PtcSession> & { termId?: string }) => put<PtcSession>(`/ptc/sessions/${id}`, data),
+      create: (data: Partial<PtcSession> & { termId?: string }) =>
+        post<PtcSession>("/ptc/sessions", data),
+      update: (id: string, data: Partial<PtcSession> & { termId?: string }) =>
+        put<PtcSession>(`/ptc/sessions/${id}`, data),
       delete: (id: string) => del(`/ptc/sessions/${id}`),
     },
     meetings: {
-      list: (sessionId?: string) => get<PtcMeeting[]>("/ptc/meetings", sessionId ? { sessionId } : {}),
+      list: (sessionId?: string) =>
+        get<PtcMeeting[]>("/ptc/meetings", sessionId ? { sessionId } : {}),
       my: () => get<PtcMeeting[]>("/ptc/meetings/my"),
       me: () => get<PtcMeeting[]>("/ptc/meetings/me"),
       create: (data: {
-        sessionId?: string; staffId: string; guardianId: string; pupilId?: string;
-        meetingDate: string; startTime: string; endTime?: string; venue?: string; agenda?: string;
+        sessionId?: string;
+        staffId: string;
+        guardianId: string;
+        pupilId?: string;
+        meetingDate: string;
+        startTime: string;
+        endTime?: string;
+        venue?: string;
+        agenda?: string;
       }) => post<PtcMeeting>("/ptc/meetings", data),
-      update: (id: string, data: {
-        status?: string; teacherNotes?: string; adminNotes?: string;
-        agenda?: string; venue?: string; meetingDate?: string; startTime?: string; endTime?: string;
-      }) => put<PtcMeeting>(`/ptc/meetings/${id}`, data),
+      update: (
+        id: string,
+        data: {
+          status?: string;
+          teacherNotes?: string;
+          adminNotes?: string;
+          agenda?: string;
+          venue?: string;
+          meetingDate?: string;
+          startTime?: string;
+          endTime?: string;
+        },
+      ) => put<PtcMeeting>(`/ptc/meetings/${id}`, data),
       delete: (id: string) => del(`/ptc/meetings/${id}`),
     },
   },
 };
 
 // ─── Types ───────────────────────────────────────────────────────
-export interface PageResponse<T> { content: T[]; page: number; size: number; totalElements: number; totalPages: number; }
-export interface DashboardData { totalPupils: number; activeStaff: number; totalClasses: number; presentToday: number; collectedThisMonth: number; recentAnnouncements: { id: string; title: string; createdAt: string }[]; }
-export interface Pupil { id: string; admissionNo: string; fullName: string; gender?: string; dob?: string; status: string; schoolClass?: SchoolClass; classId?: string; address?: string; phone?: string; photoUrl?: string; bloodGroup?: string; allergies?: string; medicalInfo?: string; }
-export interface Staff { id: string; staffNo: string; fullName: string; gender?: string; email?: string; phone?: string; isTeacher: boolean; status: string; basicSalary?: number; photoUrl?: string; signatureUrl?: string; employmentType?: string; contractEndDate?: string; roleCategory?: string; userId?: string; }
-export interface SchoolClass { id: string; name: string; stream?: string; levelOrder: number; capacity?: number; classTeacher?: Staff; classTeacherId?: string; }
-export interface Subject { id: string; name: string; code?: string; }
-export interface AcademicYear { id: string; name: string; startDate: string; endDate: string; isCurrent: boolean; }
-export interface Term { id: string; name: string; startDate: string; endDate: string; isCurrent: boolean; academicYear?: AcademicYear; }
-export interface Attendance { id: string; pupil: Pupil; pupilId?: string; date: string; status: string; classId?: string; notes?: string; }
+export interface PageResponse<T> {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}
+export interface DashboardData {
+  totalPupils: number;
+  activeStaff: number;
+  totalClasses: number;
+  presentToday: number;
+  collectedThisMonth: number;
+  recentAnnouncements: { id: string; title: string; createdAt: string }[];
+}
+export interface Pupil {
+  id: string;
+  admissionNo: string;
+  fullName: string;
+  gender?: string;
+  dob?: string;
+  status: string;
+  schoolClass?: SchoolClass;
+  classId?: string;
+  address?: string;
+  phone?: string;
+  photoUrl?: string;
+  bloodGroup?: string;
+  allergies?: string;
+  medicalInfo?: string;
+}
+export interface Staff {
+  id: string;
+  staffNo: string;
+  fullName: string;
+  gender?: string;
+  email?: string;
+  phone?: string;
+  isTeacher: boolean;
+  status: string;
+  basicSalary?: number;
+  photoUrl?: string;
+  signatureUrl?: string;
+  employmentType?: string;
+  contractEndDate?: string;
+  roleCategory?: string;
+  userId?: string;
+}
+export interface SchoolClass {
+  id: string;
+  name: string;
+  stream?: string;
+  levelOrder: number;
+  capacity?: number;
+  classTeacher?: Staff;
+  classTeacherId?: string;
+}
+export interface Subject {
+  id: string;
+  name: string;
+  code?: string;
+}
+export interface AcademicYear {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  isCurrent: boolean;
+}
+export interface Term {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  isCurrent: boolean;
+  academicYear?: AcademicYear;
+}
+export interface Attendance {
+  id: string;
+  pupil: Pupil;
+  pupilId?: string;
+  date: string;
+  status: string;
+  classId?: string;
+  notes?: string;
+}
 export type AssessmentType = "MID_TERM" | "END_OF_TERM" | "MOCK" | "OPENER" | "OTHER";
-export interface Exam { id: string; name: string; termId?: string; assessmentType?: AssessmentType; examDate?: string; outOf: number; weight: number; }
-export interface Mark { id: string; pupil: Pupil; exam: Exam; subject: Subject; score: number; comment?: string; }
-export interface FeeItem { id: string; name: string; category: string; amount: number; classId?: string; termId?: string; isRecurring: boolean; dueDate?: string; schoolClass?: SchoolClass; term?: Term; }
-export interface Invoice { id: string; invoiceNo: string; pupil: Pupil; pupilId?: string; total: number; paid: number; status: string; dueDate?: string; description?: string; createdAt?: string; termId?: string; term?: Term; feeItemId?: string; feeItem?: FeeItem; lateFeeApplied?: boolean; }
-export interface Payment { id: string; receiptNo: string; pupil?: Pupil; pupilId?: string; invoice?: Invoice; invoiceId?: string; amount: number; method: string; paidOn: string; reference?: string; status: "PENDING" | "CONFIRMED" | "REJECTED"; submittedBy?: Guardian; rejectionReason?: string; }
-export interface Announcement { id: string; title: string; body: string; audience: string; createdAt: string; }
-export interface CalendarEvent { id: string; title: string; description?: string; startsAt: string; endsAt?: string; location?: string; audience: string; }
-export interface Homework { id: string; title: string; description?: string; schoolClass?: SchoolClass; classId?: string; subject?: Subject; subjectId?: string; dueDate?: string; attachmentUrl?: string; }
-export interface Admission { id: string; applicationNo?: string; fullName: string; gender?: string; dob?: string; status: string; parentName?: string; parentPhone?: string; parentEmail?: string; previousSchool?: string; targetClassId?: string; targetClass?: SchoolClass; notes?: string; interviewDate?: string; regFeePaid?: number; regFeePaidOn?: string; regFeePaymentMethod?: string; pupil?: Pupil; }
-export interface Guardian { id: string; fullName: string; relationship?: string; phone?: string; email?: string; address?: string; occupation?: string; nationalId?: string; userId?: string; temporaryPassword?: string; }
-export interface ParentTeacher { id: string; staffNo: string; fullName: string; email?: string; phone?: string; signatureUrl?: string; }
-export interface ParentClassInfo { id: string; name: string; stream?: string; levelOrder: number; classTeacher?: ParentTeacher; }
-export interface AttendanceSummary { from: string; to: string; total: number; present: number; absent: number; late: number; sick: number; excused: number; percentage: number; }
-export interface PerformanceSummary { examId: string; examName: string; termName?: string; academicYearName?: string; averagePercentage: number; grade: string; }
-export interface ParentChildSummary { id: string; admissionNo: string; fullName: string; gender?: string; dateOfBirth?: string; status: string; schoolClass?: ParentClassInfo; attendance: AttendanceSummary; latestPerformance?: PerformanceSummary; reportCardCount: number; }
-export interface ParentDashboard { guardian: Guardian; children: ParentChildSummary[]; }
-export interface ParentSubjectResult { subjectId: string; subjectName: string; score: number; outOf: number; percentage: number; grade: string; comment?: string; }
-export interface ParentReportCard { pupilId: string; pupilName: string; admissionNo: string; examId: string; examName: string; assessmentType?: string; examDate?: string; termId?: string; termName?: string; academicYearId?: string; academicYearName?: string; schoolClass?: ParentClassInfo; subjects: ParentSubjectResult[]; totalScore: number; totalOutOf: number; averagePercentage: number; overallGrade: string; attendance: AttendanceSummary; classTeacherRemark?: string; headTeacherRemark?: string; }
-export interface PromotionRequest { pupilIds: string[]; targetClassId: string; academicYearId?: string; promotedOn?: string; notes?: string; }
-export interface PromotionRecord { id: string; pupilId: string; pupilName: string; fromClassId: string; fromClassName: string; toClassId: string; toClassName: string; academicYearId?: string; academicYearName?: string; promotedOn: string; notes?: string; }
-export interface PromotionResult { promotedCount: number; promotions: PromotionRecord[]; }
-export interface HealthRecord { id: string; pupil: Pupil; visitDate: string; complaint?: string; diagnosis?: string; treatment?: string; medication?: string; attendedBy?: string; notes?: string; }
-export interface DisciplineRecord { id: string; pupil: Pupil; kind: string; description: string; actionTaken?: string; occurredOn: string; points?: number; }
-export interface LibraryBook { id: string; title: string; author?: string; isbn?: string; category?: string; shelf?: string; copiesTotal: number; copiesAvailable: number; }
-export interface LibraryLoan { id: string; book: LibraryBook; pupil?: Pupil; borrowedOn: string; dueOn: string; returnedOn?: string; status: string; }
-export interface InventoryItem { id: string; name: string; category?: string; sku?: string; unit?: string; location?: string; quantity: number; reorderLevel?: number; unitCost?: number; }
-export interface InventoryTxn { id: string; item: InventoryItem; direction: string; quantity: number; reason?: string; occurredOn: string; }
-export interface Vehicle { id: string; regNo: string; model?: string; capacity?: number; driverName?: string; driverPhone?: string; notes?: string; }
-export interface TransportRoute { id: string; name: string; pickupPoints?: string; vehicle?: Vehicle; fee?: number; }
-export interface TransportPickupPoint { id: string; name: string; fee: number; }
-export interface TransportAssignment { id: string; pupil: Pupil; route: TransportRoute; pickupPoint?: string; pickupPointRef?: TransportPickupPoint; active: boolean; }
-export interface CanteenMenuItem { id: string; name: string; description?: string; category: string; price: number; isAvailable: boolean; }
-export interface CanteenMealPlan { id: string; name: string; description?: string; mealsPerDay: number; pricePerTerm: number; isActive: boolean; }
-export interface CanteenSale { id: string; itemId?: string; itemName: string; pupil?: Pupil; pupilId?: string; quantity: number; unitPrice: number; total: number; paymentMethod?: string; servedOn: string; notes?: string; }
-export interface CanteenSubscription { id: string; pupil: Pupil; plan: CanteenMealPlan; status: string; startDate: string; endDate?: string; }
-export interface LeaveRequest { id: string; staff: Staff; leaveType: string; startDate: string; endDate: string; reason?: string; status: string; }
-export interface PayrollPeriod { id: string; periodLabel: string; periodStart: string; periodEnd: string; status: string; }
-export interface Payslip { id: string; staff: Staff; period: PayrollPeriod; basic: number; allowances: number; deductions: number; tax: number; netPay: number; }
-export interface Supplier { id: string; name: string; contactPerson?: string; phone?: string; email?: string; address?: string; taxNo?: string; notes?: string; }
-export interface PurchaseOrder { id: string; poNo?: string; supplier?: Supplier; orderDate: string; status: string; total: number; receivedAt?: string; }
-export interface PurchaseOrderItem { id: string; item: InventoryItem; quantity: number; unitCost: number; }
-export interface Expense { id: string; category: string; amount: number; payee?: string; description?: string; paymentMethod?: string; refNo?: string; spentOn: string; }
-export interface Message { id: string; body: string; subject?: string; channel: string; audience?: string; sentAt: string; recipientCount?: number; recipientLabel?: string; }
-export interface TimetableSlot { id: string; schoolClass: SchoolClass; classId?: string; subject?: Subject; subjectId?: string; teacher?: Staff; teacherId?: string; dayOfWeek: number; startTime: string; endTime: string; room?: string; }
-export interface SchoolSettings { id: number; name: string; motto?: string; address?: string; phone?: string; email?: string; website?: string; currency: string; logoUrl?: string; bannerUrl?: string; city?: string; province?: string; country?: string; postalCode?: string; poBox?: string; district?: string; plotNumber?: string; latitude?: number; longitude?: number; mapUrl?: string; establishedYear?: number; registrationNo?: string; tpin?: string; headTeacher?: string; headTeacherSignatureUrl?: string; deputyHead?: string; dashboardHeroHeading?: string; dashboardHeroSubtext?: string; dashboardHeroImageUrl?: string; dashboardButtonLabel?: string; dashboardButtonUrl?: string; dashboardLinks?: string; loginButtonLabel?: string; loginButtonUrl?: string; }
-export interface DashboardLink { label: string; url: string; }
-export interface ReportCardRemark { id: string; pupil: Pupil; exam: Exam; classTeacherRemark?: string; headTeacherRemark?: string; }
-export interface AppUser { id: string; email: string; fullName?: string; roles: string[]; createdAt: string; mustChangePassword?: boolean; }
-export interface SchoolDocument { id: string; title: string; category?: string; description?: string; url: string; createdAt: string; }
-export interface ReportData { totalPupils: number; totalStaff: number; totalClasses: number; feesCollected: number; feesBilled: number; totalExpenses: number; libraryBooks: number; activeLoans: number; attendancePresent: number; totalAdmissions: number; totalVehicles: number; clinicVisits: number; }
-export interface SystemRole { id: string; name: string; description?: string; isSystem: boolean; permissions: SystemPermission[]; createdAt: string; }
-export interface SystemPermission { id: string; name: string; description?: string; module: string; createdAt?: string; }
-export interface AuditLogEntry { id: string; action: string; entity?: string; entityId?: string; details?: string; userId?: string; createdAt: string; }
-export interface PtcSession { id: string; title: string; sessionDate: string; venue?: string; description?: string; startTime?: string; endTime?: string; term?: Term; createdAt: string; }
-export interface PtcMeeting { id: string; session?: PtcSession; staff: Staff; guardian: Guardian; pupil?: Pupil; meetingDate: string; startTime: string; endTime?: string; venue?: string; status: string; agenda?: string; teacherNotes?: string; adminNotes?: string; createdAt: string; }
+export interface Exam {
+  id: string;
+  name: string;
+  termId?: string;
+  assessmentType?: AssessmentType;
+  examDate?: string;
+  outOf: number;
+  weight: number;
+}
+export interface Mark {
+  id: string;
+  pupil: Pupil;
+  exam: Exam;
+  subject: Subject;
+  score: number;
+  comment?: string;
+}
+export interface FeeItem {
+  id: string;
+  name: string;
+  category: string;
+  amount: number;
+  classId?: string;
+  termId?: string;
+  isRecurring: boolean;
+  dueDate?: string;
+  schoolClass?: SchoolClass;
+  term?: Term;
+}
+export interface Invoice {
+  id: string;
+  invoiceNo: string;
+  pupil: Pupil;
+  pupilId?: string;
+  total: number;
+  paid: number;
+  status: string;
+  dueDate?: string;
+  description?: string;
+  createdAt?: string;
+  termId?: string;
+  term?: Term;
+  feeItemId?: string;
+  feeItem?: FeeItem;
+  lateFeeApplied?: boolean;
+}
+export interface Payment {
+  id: string;
+  receiptNo: string;
+  pupil?: Pupil;
+  pupilId?: string;
+  invoice?: Invoice;
+  invoiceId?: string;
+  amount: number;
+  method: string;
+  paidOn: string;
+  reference?: string;
+  status: "PENDING" | "CONFIRMED" | "REJECTED";
+  submittedBy?: Guardian;
+  rejectionReason?: string;
+}
+export interface Announcement {
+  id: string;
+  title: string;
+  body: string;
+  audience: string;
+  createdAt: string;
+}
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  description?: string;
+  startsAt: string;
+  endsAt?: string;
+  location?: string;
+  audience: string;
+}
+export interface Homework {
+  id: string;
+  title: string;
+  description?: string;
+  schoolClass?: SchoolClass;
+  classId?: string;
+  subject?: Subject;
+  subjectId?: string;
+  dueDate?: string;
+  attachmentUrl?: string;
+}
+export interface Admission {
+  id: string;
+  applicationNo?: string;
+  fullName: string;
+  gender?: string;
+  dob?: string;
+  status: string;
+  parentName?: string;
+  parentPhone?: string;
+  parentEmail?: string;
+  previousSchool?: string;
+  targetClassId?: string;
+  targetClass?: SchoolClass;
+  notes?: string;
+  interviewDate?: string;
+  regFeePaid?: number;
+  regFeePaidOn?: string;
+  regFeePaymentMethod?: string;
+  pupil?: Pupil;
+}
+export interface Guardian {
+  id: string;
+  fullName: string;
+  relationship?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  occupation?: string;
+  nationalId?: string;
+  userId?: string;
+  temporaryPassword?: string;
+}
+export interface ParentTeacher {
+  id: string;
+  staffNo: string;
+  fullName: string;
+  email?: string;
+  phone?: string;
+  signatureUrl?: string;
+}
+export interface ParentClassInfo {
+  id: string;
+  name: string;
+  stream?: string;
+  levelOrder: number;
+  classTeacher?: ParentTeacher;
+}
+export interface AttendanceSummary {
+  from: string;
+  to: string;
+  total: number;
+  present: number;
+  absent: number;
+  late: number;
+  sick: number;
+  excused: number;
+  percentage: number;
+}
+export interface PerformanceSummary {
+  examId: string;
+  examName: string;
+  termName?: string;
+  academicYearName?: string;
+  averagePercentage: number;
+  grade: string;
+}
+export interface ParentChildSummary {
+  id: string;
+  admissionNo: string;
+  fullName: string;
+  gender?: string;
+  dateOfBirth?: string;
+  status: string;
+  schoolClass?: ParentClassInfo;
+  attendance: AttendanceSummary;
+  latestPerformance?: PerformanceSummary;
+  reportCardCount: number;
+}
+export interface ParentDashboard {
+  guardian: Guardian;
+  children: ParentChildSummary[];
+}
+export interface ParentSubjectResult {
+  subjectId: string;
+  subjectName: string;
+  score: number;
+  outOf: number;
+  percentage: number;
+  grade: string;
+  comment?: string;
+}
+export interface ParentReportCard {
+  pupilId: string;
+  pupilName: string;
+  admissionNo: string;
+  examId: string;
+  examName: string;
+  assessmentType?: string;
+  examDate?: string;
+  termId?: string;
+  termName?: string;
+  academicYearId?: string;
+  academicYearName?: string;
+  schoolClass?: ParentClassInfo;
+  subjects: ParentSubjectResult[];
+  totalScore: number;
+  totalOutOf: number;
+  averagePercentage: number;
+  overallGrade: string;
+  attendance: AttendanceSummary;
+  classTeacherRemark?: string;
+  headTeacherRemark?: string;
+}
+export interface PromotionRequest {
+  pupilIds: string[];
+  targetClassId: string;
+  academicYearId?: string;
+  promotedOn?: string;
+  notes?: string;
+}
+export interface PromotionRecord {
+  id: string;
+  pupilId: string;
+  pupilName: string;
+  fromClassId: string;
+  fromClassName: string;
+  toClassId: string;
+  toClassName: string;
+  academicYearId?: string;
+  academicYearName?: string;
+  promotedOn: string;
+  notes?: string;
+}
+export interface PromotionResult {
+  promotedCount: number;
+  promotions: PromotionRecord[];
+}
+export interface HealthRecord {
+  id: string;
+  pupil: Pupil;
+  visitDate: string;
+  complaint?: string;
+  diagnosis?: string;
+  treatment?: string;
+  medication?: string;
+  attendedBy?: string;
+  notes?: string;
+}
+export interface DisciplineRecord {
+  id: string;
+  pupil: Pupil;
+  kind: string;
+  description: string;
+  actionTaken?: string;
+  occurredOn: string;
+  points?: number;
+}
+export interface LibraryBook {
+  id: string;
+  title: string;
+  author?: string;
+  isbn?: string;
+  category?: string;
+  shelf?: string;
+  copiesTotal: number;
+  copiesAvailable: number;
+}
+export interface LibraryLoan {
+  id: string;
+  book: LibraryBook;
+  pupil?: Pupil;
+  borrowedOn: string;
+  dueOn: string;
+  returnedOn?: string;
+  status: string;
+}
+export interface InventoryItem {
+  id: string;
+  name: string;
+  category?: string;
+  sku?: string;
+  unit?: string;
+  location?: string;
+  quantity: number;
+  reorderLevel?: number;
+  unitCost?: number;
+}
+export interface InventoryTxn {
+  id: string;
+  item: InventoryItem;
+  direction: string;
+  quantity: number;
+  reason?: string;
+  occurredOn: string;
+}
+export interface Vehicle {
+  id: string;
+  regNo: string;
+  model?: string;
+  capacity?: number;
+  driverName?: string;
+  driverPhone?: string;
+  notes?: string;
+}
+export interface TransportRoute {
+  id: string;
+  name: string;
+  pickupPoints?: string;
+  vehicle?: Vehicle;
+  fee?: number;
+}
+export interface TransportPickupPoint {
+  id: string;
+  name: string;
+  fee: number;
+}
+export interface TransportAssignment {
+  id: string;
+  pupil: Pupil;
+  route: TransportRoute;
+  pickupPoint?: string;
+  pickupPointRef?: TransportPickupPoint;
+  active: boolean;
+}
+export interface CanteenMenuItem {
+  id: string;
+  name: string;
+  description?: string;
+  category: string;
+  price: number;
+  isAvailable: boolean;
+}
+export interface CanteenMealPlan {
+  id: string;
+  name: string;
+  description?: string;
+  mealsPerDay: number;
+  pricePerTerm: number;
+  isActive: boolean;
+}
+export interface CanteenSale {
+  id: string;
+  itemId?: string;
+  itemName: string;
+  pupil?: Pupil;
+  pupilId?: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+  paymentMethod?: string;
+  servedOn: string;
+  notes?: string;
+}
+export interface CanteenSubscription {
+  id: string;
+  pupil: Pupil;
+  plan: CanteenMealPlan;
+  status: string;
+  startDate: string;
+  endDate?: string;
+}
+export interface LeaveRequest {
+  id: string;
+  staff: Staff;
+  leaveType: string;
+  startDate: string;
+  endDate: string;
+  reason?: string;
+  status: string;
+}
+export interface PayrollPeriod {
+  id: string;
+  periodLabel: string;
+  periodStart: string;
+  periodEnd: string;
+  status: string;
+}
+export interface Payslip {
+  id: string;
+  staff: Staff;
+  period: PayrollPeriod;
+  basic: number;
+  allowances: number;
+  deductions: number;
+  tax: number;
+  netPay: number;
+}
+export interface Supplier {
+  id: string;
+  name: string;
+  contactPerson?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  taxNo?: string;
+  notes?: string;
+}
+export interface PurchaseOrder {
+  id: string;
+  poNo?: string;
+  supplier?: Supplier;
+  orderDate: string;
+  status: string;
+  total: number;
+  receivedAt?: string;
+}
+export interface PurchaseOrderItem {
+  id: string;
+  item: InventoryItem;
+  quantity: number;
+  unitCost: number;
+}
+export interface Expense {
+  id: string;
+  category: string;
+  amount: number;
+  payee?: string;
+  description?: string;
+  paymentMethod?: string;
+  refNo?: string;
+  spentOn: string;
+}
+export interface Message {
+  id: string;
+  body: string;
+  subject?: string;
+  channel: string;
+  audience?: string;
+  sentAt: string;
+  recipientCount?: number;
+  recipientLabel?: string;
+}
+export interface TimetableSlot {
+  id: string;
+  schoolClass: SchoolClass;
+  classId?: string;
+  subject?: Subject;
+  subjectId?: string;
+  teacher?: Staff;
+  teacherId?: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  room?: string;
+}
+export interface SchoolSettings {
+  id: number;
+  name: string;
+  motto?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  website?: string;
+  facebookUrl?: string;
+  currency: string;
+  logoUrl?: string;
+  bannerUrl?: string;
+  city?: string;
+  province?: string;
+  country?: string;
+  postalCode?: string;
+  poBox?: string;
+  district?: string;
+  plotNumber?: string;
+  latitude?: number;
+  longitude?: number;
+  mapUrl?: string;
+  establishedYear?: number;
+  registrationNo?: string;
+  tpin?: string;
+  headTeacher?: string;
+  headTeacherSignatureUrl?: string;
+  deputyHead?: string;
+  dashboardHeroHeading?: string;
+  dashboardHeroSubtext?: string;
+  dashboardHeroImageUrl?: string;
+  dashboardButtonLabel?: string;
+  dashboardButtonUrl?: string;
+  dashboardLinks?: string;
+  loginButtonLabel?: string;
+  loginButtonUrl?: string;
+  landingHeroHeading?: string;
+  landingHeroSubtext?: string;
+  landingHeroImages?: string;
+  landingAboutTitle?: string;
+  landingAboutBody?: string;
+}
+export interface PublicLanding {
+  name: string;
+  logoUrl?: string;
+  motto?: string;
+  establishedYear?: number;
+  headTeacher?: string;
+  address?: string;
+  city?: string;
+  province?: string;
+  country?: string;
+  phone?: string;
+  email?: string;
+  website?: string;
+  facebookUrl?: string;
+  mapUrl?: string;
+  heroHeading?: string;
+  heroSubtext?: string;
+  heroImages?: string;
+  aboutTitle?: string;
+  aboutBody?: string;
+  pupilCount: number;
+  staffCount: number;
+}
+export interface Inquiry {
+  id: string;
+  fullName: string;
+  email?: string;
+  phone?: string;
+  message: string;
+  read: boolean;
+  createdAt: string;
+}
+export interface DashboardLink {
+  label: string;
+  url: string;
+}
+export interface ReportCardRemark {
+  id: string;
+  pupil: Pupil;
+  exam: Exam;
+  classTeacherRemark?: string;
+  headTeacherRemark?: string;
+}
+export interface AppUser {
+  id: string;
+  email: string;
+  fullName?: string;
+  roles: string[];
+  createdAt: string;
+  mustChangePassword?: boolean;
+}
+export interface SchoolDocument {
+  id: string;
+  title: string;
+  category?: string;
+  description?: string;
+  url: string;
+  createdAt: string;
+}
+export interface ReportData {
+  totalPupils: number;
+  totalStaff: number;
+  totalClasses: number;
+  feesCollected: number;
+  feesBilled: number;
+  totalExpenses: number;
+  libraryBooks: number;
+  activeLoans: number;
+  attendancePresent: number;
+  totalAdmissions: number;
+  totalVehicles: number;
+  clinicVisits: number;
+}
+export interface SystemRole {
+  id: string;
+  name: string;
+  description?: string;
+  isSystem: boolean;
+  permissions: SystemPermission[];
+  createdAt: string;
+}
+export interface SystemPermission {
+  id: string;
+  name: string;
+  description?: string;
+  module: string;
+  createdAt?: string;
+}
+export interface AuditLogEntry {
+  id: string;
+  action: string;
+  entity?: string;
+  entityId?: string;
+  details?: string;
+  userId?: string;
+  createdAt: string;
+}
+export interface PtcSession {
+  id: string;
+  title: string;
+  sessionDate: string;
+  venue?: string;
+  description?: string;
+  startTime?: string;
+  endTime?: string;
+  term?: Term;
+  createdAt: string;
+}
+export interface PtcMeeting {
+  id: string;
+  session?: PtcSession;
+  staff: Staff;
+  guardian: Guardian;
+  pupil?: Pupil;
+  meetingDate: string;
+  startTime: string;
+  endTime?: string;
+  venue?: string;
+  status: string;
+  agenda?: string;
+  teacherNotes?: string;
+  adminNotes?: string;
+  createdAt: string;
+}

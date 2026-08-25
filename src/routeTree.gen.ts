@@ -9,6 +9,8 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as ChangePasswordRouteImport } from './routes/change-password'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
@@ -31,6 +33,7 @@ import { Route as AuthenticatedMarksRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedLibraryRouteImport } from './routes/_authenticated/library'
 import { Route as AuthenticatedLeaveRouteImport } from './routes/_authenticated/leave'
 import { Route as AuthenticatedInventoryRouteImport } from './routes/_authenticated/inventory'
+import { Route as AuthenticatedInquiriesRouteImport } from './routes/_authenticated/inquiries'
 import { Route as AuthenticatedHomeworkRouteImport } from './routes/_authenticated/homework'
 import { Route as AuthenticatedHealthRouteImport } from './routes/_authenticated/health'
 import { Route as AuthenticatedGuardiansRouteImport } from './routes/_authenticated/guardians'
@@ -54,6 +57,16 @@ import { Route as AuthenticatedStaffStaffIdRouteImport } from './routes/_authent
 import { Route as AuthenticatedPupilsPupilIdRouteImport } from './routes/_authenticated/pupils_.$pupilId'
 import { Route as AuthenticatedGuardiansGuardianIdRouteImport } from './routes/_authenticated/guardians_.$guardianId'
 
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ChangePasswordRoute = ChangePasswordRouteImport.update({
   id: '/change-password',
   path: '/change-password',
@@ -163,6 +176,11 @@ const AuthenticatedLeaveRoute = AuthenticatedLeaveRouteImport.update({
 const AuthenticatedInventoryRoute = AuthenticatedInventoryRouteImport.update({
   id: '/inventory',
   path: '/inventory',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedInquiriesRoute = AuthenticatedInquiriesRouteImport.update({
+  id: '/inquiries',
+  path: '/inquiries',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedHomeworkRoute = AuthenticatedHomeworkRouteImport.update({
@@ -286,6 +304,8 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/change-password': typeof ChangePasswordRoute
+  '/forgot-password': typeof ForgotPasswordRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/academic-years': typeof AuthenticatedAcademicYearsRoute
   '/accounts': typeof AuthenticatedAccountsRoute
   '/admissions': typeof AuthenticatedAdmissionsRoute
@@ -305,6 +325,7 @@ export interface FileRoutesByFullPath {
   '/guardians': typeof AuthenticatedGuardiansRoute
   '/health': typeof AuthenticatedHealthRoute
   '/homework': typeof AuthenticatedHomeworkRoute
+  '/inquiries': typeof AuthenticatedInquiriesRoute
   '/inventory': typeof AuthenticatedInventoryRoute
   '/leave': typeof AuthenticatedLeaveRoute
   '/library': typeof AuthenticatedLibraryRoute
@@ -331,6 +352,8 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/change-password': typeof ChangePasswordRoute
+  '/forgot-password': typeof ForgotPasswordRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/academic-years': typeof AuthenticatedAcademicYearsRoute
   '/accounts': typeof AuthenticatedAccountsRoute
   '/admissions': typeof AuthenticatedAdmissionsRoute
@@ -350,6 +373,7 @@ export interface FileRoutesByTo {
   '/guardians': typeof AuthenticatedGuardiansRoute
   '/health': typeof AuthenticatedHealthRoute
   '/homework': typeof AuthenticatedHomeworkRoute
+  '/inquiries': typeof AuthenticatedInquiriesRoute
   '/inventory': typeof AuthenticatedInventoryRoute
   '/leave': typeof AuthenticatedLeaveRoute
   '/library': typeof AuthenticatedLibraryRoute
@@ -378,6 +402,8 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/change-password': typeof ChangePasswordRoute
+  '/forgot-password': typeof ForgotPasswordRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/_authenticated/academic-years': typeof AuthenticatedAcademicYearsRoute
   '/_authenticated/accounts': typeof AuthenticatedAccountsRoute
   '/_authenticated/admissions': typeof AuthenticatedAdmissionsRoute
@@ -397,6 +423,7 @@ export interface FileRoutesById {
   '/_authenticated/guardians': typeof AuthenticatedGuardiansRoute
   '/_authenticated/health': typeof AuthenticatedHealthRoute
   '/_authenticated/homework': typeof AuthenticatedHomeworkRoute
+  '/_authenticated/inquiries': typeof AuthenticatedInquiriesRoute
   '/_authenticated/inventory': typeof AuthenticatedInventoryRoute
   '/_authenticated/leave': typeof AuthenticatedLeaveRoute
   '/_authenticated/library': typeof AuthenticatedLibraryRoute
@@ -425,6 +452,8 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/change-password'
+    | '/forgot-password'
+    | '/reset-password'
     | '/academic-years'
     | '/accounts'
     | '/admissions'
@@ -444,6 +473,7 @@ export interface FileRouteTypes {
     | '/guardians'
     | '/health'
     | '/homework'
+    | '/inquiries'
     | '/inventory'
     | '/leave'
     | '/library'
@@ -470,6 +500,8 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/change-password'
+    | '/forgot-password'
+    | '/reset-password'
     | '/academic-years'
     | '/accounts'
     | '/admissions'
@@ -489,6 +521,7 @@ export interface FileRouteTypes {
     | '/guardians'
     | '/health'
     | '/homework'
+    | '/inquiries'
     | '/inventory'
     | '/leave'
     | '/library'
@@ -516,6 +549,8 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/change-password'
+    | '/forgot-password'
+    | '/reset-password'
     | '/_authenticated/academic-years'
     | '/_authenticated/accounts'
     | '/_authenticated/admissions'
@@ -535,6 +570,7 @@ export interface FileRouteTypes {
     | '/_authenticated/guardians'
     | '/_authenticated/health'
     | '/_authenticated/homework'
+    | '/_authenticated/inquiries'
     | '/_authenticated/inventory'
     | '/_authenticated/leave'
     | '/_authenticated/library'
@@ -563,10 +599,26 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   ChangePasswordRoute: typeof ChangePasswordRoute
+  ForgotPasswordRoute: typeof ForgotPasswordRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/change-password': {
       id: '/change-password'
       path: '/change-password'
@@ -719,6 +771,13 @@ declare module '@tanstack/react-router' {
       path: '/inventory'
       fullPath: '/inventory'
       preLoaderRoute: typeof AuthenticatedInventoryRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/inquiries': {
+      id: '/_authenticated/inquiries'
+      path: '/inquiries'
+      fullPath: '/inquiries'
+      preLoaderRoute: typeof AuthenticatedInquiriesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/homework': {
@@ -898,6 +957,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedGuardiansRoute: typeof AuthenticatedGuardiansRoute
   AuthenticatedHealthRoute: typeof AuthenticatedHealthRoute
   AuthenticatedHomeworkRoute: typeof AuthenticatedHomeworkRoute
+  AuthenticatedInquiriesRoute: typeof AuthenticatedInquiriesRoute
   AuthenticatedInventoryRoute: typeof AuthenticatedInventoryRoute
   AuthenticatedLeaveRoute: typeof AuthenticatedLeaveRoute
   AuthenticatedLibraryRoute: typeof AuthenticatedLibraryRoute
@@ -941,6 +1001,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedGuardiansRoute: AuthenticatedGuardiansRoute,
   AuthenticatedHealthRoute: AuthenticatedHealthRoute,
   AuthenticatedHomeworkRoute: AuthenticatedHomeworkRoute,
+  AuthenticatedInquiriesRoute: AuthenticatedInquiriesRoute,
   AuthenticatedInventoryRoute: AuthenticatedInventoryRoute,
   AuthenticatedLeaveRoute: AuthenticatedLeaveRoute,
   AuthenticatedLibraryRoute: AuthenticatedLibraryRoute,
@@ -972,6 +1033,8 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   ChangePasswordRoute: ChangePasswordRoute,
+  ForgotPasswordRoute: ForgotPasswordRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
