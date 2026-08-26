@@ -16,6 +16,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/users'
+import { Route as AuthenticatedUniformRouteImport } from './routes/_authenticated/uniform'
 import { Route as AuthenticatedTransportRouteImport } from './routes/_authenticated/transport'
 import { Route as AuthenticatedTimetableRouteImport } from './routes/_authenticated/timetable'
 import { Route as AuthenticatedSubjectsRouteImport } from './routes/_authenticated/subjects'
@@ -89,6 +90,11 @@ const IndexRoute = IndexRouteImport.update({
 const AuthenticatedUsersRoute = AuthenticatedUsersRouteImport.update({
   id: '/users',
   path: '/users',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedUniformRoute = AuthenticatedUniformRouteImport.update({
+  id: '/uniform',
+  path: '/uniform',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedTransportRoute = AuthenticatedTransportRouteImport.update({
@@ -343,6 +349,7 @@ export interface FileRoutesByFullPath {
   '/subjects': typeof AuthenticatedSubjectsRoute
   '/timetable': typeof AuthenticatedTimetableRoute
   '/transport': typeof AuthenticatedTransportRoute
+  '/uniform': typeof AuthenticatedUniformRoute
   '/users': typeof AuthenticatedUsersRoute
   '/guardians/$guardianId': typeof AuthenticatedGuardiansGuardianIdRoute
   '/pupils/$pupilId': typeof AuthenticatedPupilsPupilIdRoute
@@ -391,6 +398,7 @@ export interface FileRoutesByTo {
   '/subjects': typeof AuthenticatedSubjectsRoute
   '/timetable': typeof AuthenticatedTimetableRoute
   '/transport': typeof AuthenticatedTransportRoute
+  '/uniform': typeof AuthenticatedUniformRoute
   '/users': typeof AuthenticatedUsersRoute
   '/guardians/$guardianId': typeof AuthenticatedGuardiansGuardianIdRoute
   '/pupils/$pupilId': typeof AuthenticatedPupilsPupilIdRoute
@@ -441,6 +449,7 @@ export interface FileRoutesById {
   '/_authenticated/subjects': typeof AuthenticatedSubjectsRoute
   '/_authenticated/timetable': typeof AuthenticatedTimetableRoute
   '/_authenticated/transport': typeof AuthenticatedTransportRoute
+  '/_authenticated/uniform': typeof AuthenticatedUniformRoute
   '/_authenticated/users': typeof AuthenticatedUsersRoute
   '/_authenticated/guardians_/$guardianId': typeof AuthenticatedGuardiansGuardianIdRoute
   '/_authenticated/pupils_/$pupilId': typeof AuthenticatedPupilsPupilIdRoute
@@ -491,6 +500,7 @@ export interface FileRouteTypes {
     | '/subjects'
     | '/timetable'
     | '/transport'
+    | '/uniform'
     | '/users'
     | '/guardians/$guardianId'
     | '/pupils/$pupilId'
@@ -539,6 +549,7 @@ export interface FileRouteTypes {
     | '/subjects'
     | '/timetable'
     | '/transport'
+    | '/uniform'
     | '/users'
     | '/guardians/$guardianId'
     | '/pupils/$pupilId'
@@ -588,6 +599,7 @@ export interface FileRouteTypes {
     | '/_authenticated/subjects'
     | '/_authenticated/timetable'
     | '/_authenticated/transport'
+    | '/_authenticated/uniform'
     | '/_authenticated/users'
     | '/_authenticated/guardians_/$guardianId'
     | '/_authenticated/pupils_/$pupilId'
@@ -652,6 +664,13 @@ declare module '@tanstack/react-router' {
       path: '/users'
       fullPath: '/users'
       preLoaderRoute: typeof AuthenticatedUsersRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/uniform': {
+      id: '/_authenticated/uniform'
+      path: '/uniform'
+      fullPath: '/uniform'
+      preLoaderRoute: typeof AuthenticatedUniformRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/transport': {
@@ -975,6 +994,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedSubjectsRoute: typeof AuthenticatedSubjectsRoute
   AuthenticatedTimetableRoute: typeof AuthenticatedTimetableRoute
   AuthenticatedTransportRoute: typeof AuthenticatedTransportRoute
+  AuthenticatedUniformRoute: typeof AuthenticatedUniformRoute
   AuthenticatedUsersRoute: typeof AuthenticatedUsersRoute
   AuthenticatedGuardiansGuardianIdRoute: typeof AuthenticatedGuardiansGuardianIdRoute
   AuthenticatedPupilsPupilIdRoute: typeof AuthenticatedPupilsPupilIdRoute
@@ -1019,6 +1039,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedSubjectsRoute: AuthenticatedSubjectsRoute,
   AuthenticatedTimetableRoute: AuthenticatedTimetableRoute,
   AuthenticatedTransportRoute: AuthenticatedTransportRoute,
+  AuthenticatedUniformRoute: AuthenticatedUniformRoute,
   AuthenticatedUsersRoute: AuthenticatedUsersRoute,
   AuthenticatedGuardiansGuardianIdRoute: AuthenticatedGuardiansGuardianIdRoute,
   AuthenticatedPupilsPupilIdRoute: AuthenticatedPupilsPupilIdRoute,

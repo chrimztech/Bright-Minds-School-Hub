@@ -12,7 +12,6 @@ import {
   CheckCircle2,
   ShieldCheck,
   Sparkles,
-  Users2,
   BookOpenCheck,
   Palette,
   Trophy,
@@ -81,35 +80,6 @@ function Reveal({
     >
       {children}
     </div>
-  );
-}
-
-// Counts up from 0 to `value` once visible — a small, purely presentational flourish for the
-// trust-signal stats strip.
-function CountUp({ value, suffix = "" }: { value: number; suffix?: string }) {
-  const { ref, visible } = useReveal<HTMLSpanElement>(0.6);
-  const [display, setDisplay] = useState(0);
-
-  useEffect(() => {
-    if (!visible || value <= 0) return;
-    const duration = 1200;
-    const start = performance.now();
-    let raf = 0;
-    const tick = (now: number) => {
-      const progress = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setDisplay(Math.round(eased * value));
-      if (progress < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [visible, value]);
-
-  return (
-    <span ref={ref}>
-      {display.toLocaleString()}
-      {suffix}
-    </span>
   );
 }
 
@@ -189,10 +159,6 @@ function HeroCarousel({ images, logoSrc }: { images: string[]; logoSrc: string }
   );
 }
 
-// A raw "1+ pupils enrolled" reads as a broken counter rather than a credible trust signal —
-// only surface headcounts once they're large enough to actually look intentional.
-const MIN_CREDIBLE_HEADCOUNT = 10;
-
 // The system's own module list (mirrors the capability tags shown on /auth) — genuine,
 // truthful content about what the platform actually does, used here to keep the hero card
 // and the "platform" section substantive even on a fresh install with no school data yet.
@@ -257,7 +223,6 @@ function LandingPage() {
 
   const schoolName = landing?.name ?? "Chaz Crestview Academy";
   const year = new Date().getFullYear();
-  const yearsRunning = landing?.establishedYear ? year - landing.establishedYear : undefined;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -351,27 +316,6 @@ function LandingPage() {
                 </Button>
               </a>
             </div>
-
-            {((landing?.pupilCount ?? 0) >= MIN_CREDIBLE_HEADCOUNT || landing?.establishedYear) && (
-              <div className="mt-12 flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-white/10 pt-6 text-white/70">
-                {(landing?.pupilCount ?? 0) >= MIN_CREDIBLE_HEADCOUNT && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Users2 className="h-4 w-4 text-brand-gold" />
-                    <span>
-                      <strong className="text-white">{landing!.pupilCount}+</strong> pupils enrolled
-                    </span>
-                  </div>
-                )}
-                {landing!.establishedYear && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <ShieldCheck className="h-4 w-4 text-brand-gold" />
-                    <span>
-                      Established <strong className="text-white">{landing!.establishedYear}</strong>
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
           <Reveal className="hidden lg:block" delay={220}>
             <div className="relative overflow-hidden border border-white/20 bg-black/20 p-6 shadow-2xl shadow-black/20 backdrop-blur-md">
@@ -382,42 +326,18 @@ function LandingPage() {
               <p className="mt-5 max-w-xs font-display text-3xl leading-tight text-white">
                 Where every learner gets room to rise.
               </p>
-              {(landing?.pupilCount ?? 0) >= MIN_CREDIBLE_HEADCOUNT ||
-              (yearsRunning && yearsRunning > 0) ? (
-                <div className="mt-8 grid grid-cols-2 gap-px border border-white/10 bg-white/10">
-                  <div className="bg-black/20 p-4">
-                    <p className="font-display text-2xl text-white">
-                      {(landing?.pupilCount ?? 0) >= MIN_CREDIBLE_HEADCOUNT
-                        ? `${landing!.pupilCount}+`
-                        : "—"}
-                    </p>
-                    <p className="mt-1 text-[10px] uppercase tracking-[0.14em] text-white/55">
-                      Learners
-                    </p>
-                  </div>
-                  <div className="bg-black/20 p-4">
-                    <p className="font-display text-2xl text-white">
-                      {yearsRunning && yearsRunning > 0 ? `${yearsRunning}+` : "—"}
-                    </p>
-                    <p className="mt-1 text-[10px] uppercase tracking-[0.14em] text-white/55">
-                      Years strong
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <ul className="mt-7 space-y-3">
-                  {[
-                    "Real-time attendance & fee tracking",
-                    "Exams, report cards & communication",
-                    "One login for pupils, parents and staff",
-                  ].map((line) => (
-                    <li key={line} className="flex items-start gap-2.5 text-sm text-white/80">
-                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-brand-gold" />
-                      <span>{line}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <ul className="mt-7 space-y-3">
+                {[
+                  "Real-time attendance & fee tracking",
+                  "Exams, report cards & communication",
+                  "One login for pupils, parents and staff",
+                ].map((line) => (
+                  <li key={line} className="flex items-start gap-2.5 text-sm text-white/80">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-brand-gold" />
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ul>
               <div className="mt-6 flex items-center gap-2 text-xs text-white/65">
                 <ShieldCheck className="h-4 w-4 text-brand-gold" />
                 <span>Secure, role-protected access for every user</span>
@@ -433,49 +353,6 @@ function LandingPage() {
           <ArrowDown className="h-4 w-4" />
         </a>
       </section>
-
-      {/* ── Stats strip ─────────────────────────────────────────────────── */}
-      {/* A "0+ Staff" reads as broken rather than impressive on a fresh install with no data
-          yet — real, non-zero counts only; the qualitative platform line always shows so the
-          strip is never empty. */}
-      {(() => {
-        const stats: { value: number; suffix: string; label: string; isText?: boolean }[] = [
-          ...(landing && landing.pupilCount >= MIN_CREDIBLE_HEADCOUNT
-            ? [{ value: landing.pupilCount, suffix: "+", label: "Pupils enrolled" }]
-            : []),
-          ...(landing && landing.staffCount >= MIN_CREDIBLE_HEADCOUNT
-            ? [{ value: landing.staffCount, suffix: "+", label: "Dedicated staff" }]
-            : []),
-          ...(yearsRunning && yearsRunning > 0
-            ? [{ value: yearsRunning, suffix: "+", label: "Years of excellence" }]
-            : []),
-          { value: 1, suffix: "", label: "Connected school platform", isText: true },
-        ];
-        const gridColsClass =
-          stats.length >= 4
-            ? "sm:grid-cols-4"
-            : stats.length === 3
-              ? "sm:grid-cols-3"
-              : "sm:grid-cols-2";
-        return (
-          <section className="relative -mt-px border-b border-border/60 bg-card">
-            <div className="mx-auto max-w-6xl px-5 sm:px-8">
-              <div className={`grid grid-cols-2 divide-x divide-border/60 ${gridColsClass}`}>
-                {stats.map((s, i) => (
-                  <Reveal key={i} delay={i * 90} className="px-4 py-9 text-center sm:px-6">
-                    <p className="font-display text-3xl font-bold text-primary sm:text-4xl">
-                      {s.isText ? "All-in-one" : <CountUp value={s.value} suffix={s.suffix} />}
-                    </p>
-                    <p className="mt-1.5 text-[11.5px] font-medium uppercase tracking-wide text-muted-foreground">
-                      {s.label}
-                    </p>
-                  </Reveal>
-                ))}
-              </div>
-            </div>
-          </section>
-        );
-      })()}
 
       {/* ── Platform capabilities ──────────────────────────────────────────
           Genuine, factual content about what the software itself does — keeps the page

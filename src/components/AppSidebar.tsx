@@ -1,11 +1,43 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
-  LayoutDashboard, Users, UserSquare2, GraduationCap, School, BookOpen,
-  ClipboardCheck, Wallet, FileText, BookMarked, CalendarDays, CalendarRange, Settings,
-  LogOut, Megaphone, ScrollText, UserPlus, Library, Bus, HeartPulse,
-  Shield, Boxes, Receipt, Briefcase, ClipboardList, FolderOpen, DatabaseBackup,
-  UtensilsCrossed, BarChart3, Mail, FileSignature, History, Handshake, ChevronRight, X, ArrowUpCircle,
+  LayoutDashboard,
+  Users,
+  UserSquare2,
+  GraduationCap,
+  School,
+  BookOpen,
+  ClipboardCheck,
+  Wallet,
+  FileText,
+  BookMarked,
+  CalendarDays,
+  CalendarRange,
+  Settings,
+  LogOut,
+  Megaphone,
+  ScrollText,
+  UserPlus,
+  Library,
+  Bus,
+  HeartPulse,
+  Shield,
+  Boxes,
+  Receipt,
+  Briefcase,
+  ClipboardList,
+  FolderOpen,
+  DatabaseBackup,
+  UtensilsCrossed,
+  BarChart3,
+  Mail,
+  FileSignature,
+  History,
+  Handshake,
+  ChevronRight,
+  X,
+  ArrowUpCircle,
   Inbox,
+  Shirt,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth, hasPermission } from "@/lib/auth";
@@ -18,7 +50,13 @@ import { Button } from "@/components/ui/button";
 // name-lists that a custom role could never match regardless of what it was granted.
 // `roles` is reserved for identity checks that aren't really "permissions" (e.g. PARENT).
 // Neither means: visible to every authenticated user, matching the backend's open GET.
-type NavItem = { to: string; label: string; icon: LucideIcon; permission?: string | string[]; roles?: string[] };
+type NavItem = {
+  to: string;
+  label: string;
+  icon: LucideIcon;
+  permission?: string | string[];
+  roles?: string[];
+};
 type NavGroup = { label: string | null; items: NavItem[] };
 
 const GROUPS: NavGroup[] = [
@@ -32,20 +70,50 @@ const GROUPS: NavGroup[] = [
   {
     label: "Academic",
     items: [
-      { to: "/admissions", label: "Admissions", icon: UserPlus, permission: ["admissions:view", "admissions:manage"] },
+      {
+        to: "/admissions",
+        label: "Admissions",
+        icon: UserPlus,
+        permission: ["admissions:view", "admissions:manage"],
+      },
       { to: "/pupils", label: "Pupils", icon: Users, permission: "pupils:view" },
       { to: "/guardians", label: "Parents", icon: UserSquare2, permission: "guardians:manage" },
       { to: "/staff", label: "Staff", icon: GraduationCap, permission: "staff:view" },
       { to: "/classes", label: "Classes", icon: School, permission: "classes:view" },
-      { to: "/subjects", label: "Subjects", icon: BookOpen, permission: ["subjects:view", "subjects:manage"] },
-      { to: "/academic-years", label: "Academic years", icon: CalendarRange, permission: "academic_years:manage" },
-      { to: "/attendance", label: "Attendance", icon: ClipboardCheck, permission: "attendance:view" },
+      {
+        to: "/subjects",
+        label: "Subjects",
+        icon: BookOpen,
+        permission: ["subjects:view", "subjects:manage"],
+      },
+      {
+        to: "/academic-years",
+        label: "Academic years",
+        icon: CalendarRange,
+        permission: "academic_years:manage",
+      },
+      {
+        to: "/attendance",
+        label: "Attendance",
+        icon: ClipboardCheck,
+        permission: "attendance:view",
+      },
       { to: "/timetable", label: "Timetable", icon: CalendarDays },
       { to: "/homework", label: "Homework", icon: BookMarked },
-      { to: "/exams", label: "Exams", icon: ScrollText, permission: ["exams:view", "exams:manage"] },
+      {
+        to: "/exams",
+        label: "Exams",
+        icon: ScrollText,
+        permission: ["exams:view", "exams:manage"],
+      },
       { to: "/marks", label: "Marks", icon: FileText, permission: ["exams:view", "exams:manage"] },
       { to: "/report-cards", label: "Report cards", icon: FileText },
-      { to: "/promotions", label: "Promotions", icon: ArrowUpCircle, permission: "promotions:manage" },
+      {
+        to: "/promotions",
+        label: "Promotions",
+        icon: ArrowUpCircle,
+        permission: "promotions:manage",
+      },
     ],
   },
   {
@@ -53,19 +121,55 @@ const GROUPS: NavGroup[] = [
     items: [
       { to: "/fees", label: "Fees & payments", icon: Wallet, permission: "fees:view" },
       { to: "/accounts", label: "Accounts", icon: Receipt, permission: "accounts:manage" },
-      { to: "/payroll", label: "Payroll", icon: Briefcase, permission: ["payroll:view", "payroll:manage"] },
-      { to: "/procurement", label: "Procurement", icon: ClipboardList, permission: "procurement:manage" },
+      {
+        to: "/payroll",
+        label: "Payroll",
+        icon: Briefcase,
+        permission: ["payroll:view", "payroll:manage"],
+      },
+      {
+        to: "/procurement",
+        label: "Procurement",
+        icon: ClipboardList,
+        permission: "procurement:manage",
+      },
     ],
   },
   {
     label: "Operations",
     items: [
-      { to: "/library", label: "Library", icon: Library, permission: ["library:view", "library:manage"] },
-      { to: "/transport", label: "Transport", icon: Bus, permission: ["transport:view", "transport:manage"] },
-      { to: "/canteen", label: "Canteen", icon: UtensilsCrossed, permission: ["canteen:view", "canteen:manage"] },
+      {
+        to: "/library",
+        label: "Library",
+        icon: Library,
+        permission: ["library:view", "library:manage"],
+      },
+      {
+        to: "/transport",
+        label: "Transport",
+        icon: Bus,
+        permission: ["transport:view", "transport:manage"],
+      },
+      {
+        to: "/canteen",
+        label: "Canteen",
+        icon: UtensilsCrossed,
+        permission: ["canteen:view", "canteen:manage"],
+      },
+      {
+        to: "/uniform",
+        label: "Uniform",
+        icon: Shirt,
+        permission: ["uniform:view", "uniform:manage"],
+      },
       { to: "/health", label: "Health", icon: HeartPulse, permission: "health:manage" },
       { to: "/inventory", label: "Inventory", icon: Boxes, permission: "inventory:manage" },
-      { to: "/discipline", label: "Discipline", icon: Shield, permission: ["discipline:view", "discipline:manage"] },
+      {
+        to: "/discipline",
+        label: "Discipline",
+        icon: Shield,
+        permission: ["discipline:view", "discipline:manage"],
+      },
       { to: "/leave", label: "Leave", icon: FileSignature, permission: "leave:manage" },
     ],
   },
@@ -76,15 +180,30 @@ const GROUPS: NavGroup[] = [
       { to: "/calendar", label: "Calendar", icon: CalendarDays },
       { to: "/communication", label: "Messaging", icon: Mail, permission: "communication:manage" },
       { to: "/announcements", label: "Announcements", icon: Megaphone },
-      { to: "/documents", label: "Documents", icon: FolderOpen, permission: ["documents:view", "documents:manage"] },
-      { to: "/inquiries", label: "Inquiries", icon: Inbox, permission: ["inquiries:view", "inquiries:manage"] },
+      {
+        to: "/documents",
+        label: "Documents",
+        icon: FolderOpen,
+        permission: ["documents:view", "documents:manage"],
+      },
+      {
+        to: "/inquiries",
+        label: "Inquiries",
+        icon: Inbox,
+        permission: ["inquiries:view", "inquiries:manage"],
+      },
     ],
   },
   {
     label: "Admin",
     items: [
       { to: "/reports", label: "Reports", icon: BarChart3, permission: "reports:view" },
-      { to: "/users", label: "Users & roles", icon: Users, permission: ["users:manage", "roles:manage"] },
+      {
+        to: "/users",
+        label: "Users & roles",
+        icon: Users,
+        permission: ["users:manage", "roles:manage"],
+      },
       { to: "/audit", label: "Audit log", icon: History, permission: "audit:view" },
       { to: "/backup", label: "Backup", icon: DatabaseBackup, permission: "backup:create" },
       { to: "/settings", label: "Settings", icon: Settings, permission: "settings:edit" },
@@ -112,22 +231,25 @@ export function AppSidebar({ mobileOpen = false, onMobileClose }: AppSidebarProp
     return true;
   }
 
-  const groups = GROUPS
-    .map((g) => ({ ...g, items: g.items.filter(canSee) }))
-    .filter((g) => g.items.length > 0);
+  const groups = GROUPS.map((g) => ({ ...g, items: g.items.filter(canSee) })).filter(
+    (g) => g.items.length > 0,
+  );
 
   const initial = (user?.email ?? "?").charAt(0).toUpperCase();
 
   const sidebarContent = (
     <aside className="sidebar-surface relative flex h-full w-[276px] flex-col overflow-hidden text-sidebar-foreground">
-
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand-gold/80 to-transparent" />
 
       {/* ── Branding ─────────────────────────────────────────── */}
       <div className="flex shrink-0 items-center justify-between border-b border-sidebar-border/55 px-4 py-4">
         <div className="flex min-w-0 items-center gap-3">
           <div className="h-11 w-11 shrink-0 overflow-hidden rounded-2xl border border-white/15 bg-white p-0.5 shadow-lg shadow-black/20">
-            <img src="/logo.png" alt="Chaz Crestview Academy" className="h-full w-full object-contain" />
+            <img
+              src="/logo.png"
+              alt="Chaz Crestview Academy"
+              className="h-full w-full object-contain"
+            />
           </div>
           <div className="min-w-0">
             <p className="truncate text-[11px] font-extrabold leading-snug tracking-[0.08em] text-sidebar-foreground/95">
@@ -159,8 +281,7 @@ export function AppSidebar({ mobileOpen = false, onMobileClose }: AppSidebarProp
             )}
             <div className="space-y-1">
               {group.items.map((item) => {
-                const active =
-                  pathname === item.to || pathname.startsWith(item.to + "/");
+                const active = pathname === item.to || pathname.startsWith(item.to + "/");
                 return (
                   <Link
                     key={item.to}
@@ -178,13 +299,13 @@ export function AppSidebar({ mobileOpen = false, onMobileClose }: AppSidebarProp
                     )}
                     <item.icon
                       className={`h-4 w-4 shrink-0 transition-all ${
-                        active ? "text-brand-gold" : "opacity-55 group-hover:text-brand-sky group-hover:opacity-95"
+                        active
+                          ? "text-brand-gold"
+                          : "opacity-55 group-hover:text-brand-sky group-hover:opacity-95"
                       }`}
                     />
                     <span className="truncate flex-1">{item.label}</span>
-                    {active && (
-                      <ChevronRight className="h-3 w-3 opacity-35 shrink-0" />
-                    )}
+                    {active && <ChevronRight className="h-3 w-3 opacity-35 shrink-0" />}
                   </Link>
                 );
               })}
@@ -199,8 +320,7 @@ export function AppSidebar({ mobileOpen = false, onMobileClose }: AppSidebarProp
           <div
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-extrabold text-white shadow-lg shadow-black/15"
             style={{
-              background:
-                "linear-gradient(135deg, oklch(0.50 0.17 248), oklch(0.68 0.14 228))",
+              background: "linear-gradient(135deg, oklch(0.50 0.17 248), oklch(0.68 0.14 228))",
             }}
           >
             {initial}
@@ -219,9 +339,7 @@ export function AppSidebar({ mobileOpen = false, onMobileClose }: AppSidebarProp
                 </span>
               ))}
               {roles.length > 2 && (
-                <span className="text-[9px] text-sidebar-foreground/35">
-                  +{roles.length - 2}
-                </span>
+                <span className="text-[9px] text-sidebar-foreground/35">+{roles.length - 2}</span>
               )}
             </div>
           </div>

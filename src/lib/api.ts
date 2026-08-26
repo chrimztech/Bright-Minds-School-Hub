@@ -401,6 +401,26 @@ export const api = {
     },
   },
 
+  uniform: {
+    items: {
+      list: () => get<FeeItem[]>("/uniform/items"),
+      create: (data: { name: string; price: number }) => post<FeeItem>("/uniform/items", data),
+      update: (id: string, data: { name?: string; price?: number }) =>
+        put<FeeItem>(`/uniform/items/${id}`, data),
+      delete: (id: string) => del(`/uniform/items/${id}`),
+    },
+    sales: {
+      list: () => get<Invoice[]>("/uniform/sales"),
+      create: (data: {
+        pupilId: string;
+        itemId: string;
+        quantity: number;
+        notes?: string;
+        dueDate?: string;
+      }) => post<Invoice>("/uniform/sales", data),
+    },
+  },
+
   leave: {
     list: (staffId?: string, status?: string) => get<LeaveRequest[]>("/leave", { staffId, status }),
     create: (data: Partial<LeaveRequest>) => post<LeaveRequest>("/leave", data),
