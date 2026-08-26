@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { createPortal } from "react-dom";
 import { api } from "@/lib/api";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
@@ -13,8 +14,14 @@ export function useSchool() {
 }
 
 export function PrintOverlay({ onClose, children }: { onClose: () => void; children: ReactNode }) {
-  return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm overflow-auto" onClick={onClose}>
+  // Portaled straight onto <body>, outside the page's own component tree (which sits inside
+  // <main>). Nested inside <main> as before, hiding "everything except this overlay" for
+  // print would need CSS to poke a hole through however many ancestor elements happen to sit
+  // between <main> and this component on whichever page opened it — fragile and different per
+  // page. Living outside <main> entirely means print CSS can just hide <main> wholesale
+  // (see `.print-overlay` rules in styles.css) without needing to know anything about it.
+  return createPortal(
+    <div className="print-overlay fixed inset-0 z-50 bg-black/40 backdrop-blur-sm overflow-auto" onClick={onClose}>
       <div className="no-print sticky top-0 z-10 flex justify-end gap-2 p-4">
         <Button onClick={(e) => { e.stopPropagation(); window.print(); }}>
           <Printer className="h-4 w-4 mr-2" /> Print / Save PDF
@@ -24,7 +31,8 @@ export function PrintOverlay({ onClose, children }: { onClose: () => void; child
       <div className="mx-auto my-8 max-w-[820px] bg-white text-black shadow-2xl print-area" onClick={(e) => e.stopPropagation()}>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

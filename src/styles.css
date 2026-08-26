@@ -308,6 +308,32 @@ aside ::-webkit-scrollbar-thumb:hover { background: oklch(0.40 0.06 258 / 0.9); 
 @media print {
   body { background: white !important; }
   .no-print, aside, nav, header.no-print { display: none !important; }
-  .print-area { box-shadow: none !important; border: none !important; }
+  /* PrintOverlay now portals directly onto <body>, so it's a sibling of the whole app shell
+     (the sidebar/header/main wrapper) rather than nested inside it. Once it's open, hide every
+     other direct child of body — otherwise the app shell still prints alongside the document,
+     and its own `min-h-screen` wrapper (empty or not) reserves a full blank page ahead of it. */
+  body:has(.print-overlay) > *:not(.print-overlay) { display: none !important; }
+  /* The print overlay is `position: fixed` + `overflow: auto` for the on-screen modal —
+     browsers paginate a fixed, scroll-clipped container very badly (content from different
+     scroll offsets can overlap or repeat across printed pages instead of flowing normally),
+     which is what produced garbled/duplicated report cards. Printing needs it to behave like
+     an ordinary block in the page flow instead. */
+  .print-overlay {
+    position: static !important;
+    overflow: visible !important;
+    background: none !important;
+    backdrop-filter: none !important;
+    height: auto !important;
+    inset: auto !important;
+  }
+  .print-area {
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 !important;
+    max-width: none !important;
+  }
+  /* Keeps a subject table row, or a stat block like the attendance summary, from being
+     split across a page boundary mid-row. */
+  table tr, .print-area .grid { page-break-inside: avoid; }
   @page { margin: 16mm; }
 }
