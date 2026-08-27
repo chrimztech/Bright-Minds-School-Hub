@@ -75,7 +75,7 @@ function Attendance() {
 function DailyAttendanceTab() {
   const { classes, isTeacher } = useClassOptions();
   const qc = useQueryClient();
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(todayLocalISO());
   const [classId, setClassId] = useState<string>("");
 
   useEffect(() => {
@@ -222,20 +222,44 @@ function DailyAttendanceTab() {
   );
 }
 
+// Today's local calendar date as "YYYY-MM-DD" — deliberately NOT `new Date().toISOString()`,
+// which reads UTC. For any timezone ahead of UTC (e.g. Zambia, UTC+2) that silently returns
+// yesterday's date for the first couple of hours after local midnight.
+function todayLocalISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function currentMonthLocalISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+// Pure calendar-date arithmetic anchored to UTC internally so it never round-trips through the
+// browser's local timezone — `new Date(y, m, 0).toISOString()` shifted every date here back by
+// a full day (and sometimes into the wrong month) for any user ahead of UTC, which is exactly
+// why the register looked completely empty for a Zambia-based school (UTC+2): the day labels
+// being looked up never matched the actual saved dates.
 function monthBounds(monthStr: string) {
   const [y, m] = monthStr.split("-").map(Number);
   const from = `${monthStr}-01`;
-  const to = new Date(y, m, 0).toISOString().slice(0, 10);
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const to = `${monthStr}-${String(lastDay).padStart(2, "0")}`;
   return { from, to };
 }
 
 function daysInRange(from: string, to: string) {
   const days: string[] = [];
-  let d = new Date(from + "T00:00:00");
-  const end = new Date(to + "T00:00:00");
-  while (d <= end) {
-    days.push(d.toISOString().slice(0, 10));
-    d = new Date(d.getTime() + 86400000);
+  const [fy, fm, fd] = from.split("-").map(Number);
+  const [ty, tm, td] = to.split("-").map(Number);
+  let cursor = Date.UTC(fy, fm - 1, fd);
+  const end = Date.UTC(ty, tm - 1, td);
+  while (cursor <= end) {
+    const dt = new Date(cursor);
+    days.push(
+      `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`,
+    );
+    cursor += 86400000;
   }
   return days;
 }
@@ -244,7 +268,7 @@ function AttendanceRegisterTab() {
   const { classes, isTeacher } = useClassOptions();
   const { data: school } = useSchool();
   const [classId, setClassId] = useState<string>("");
-  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [month, setMonth] = useState(currentMonthLocalISO());
   const [printOpen, setPrintOpen] = useState(false);
 
   useEffect(() => {
