@@ -53,6 +53,7 @@ function UniformPage() {
         description="Uniform, P.E. attire and other school-wear — sold and invoiced to a pupil's account"
       />
       <div className="p-6 space-y-6">
+        <Summary />
         <Tabs defaultValue="sales">
           <TabsList>
             <TabsTrigger value="sales">Sales</TabsTrigger>
@@ -67,6 +68,60 @@ function UniformPage() {
         </Tabs>
       </div>
     </>
+  );
+}
+
+// Compares by local calendar date, not `toISOString().slice(0,10)` — that reads UTC and
+// misclassifies "today"'s sales for any timezone ahead of UTC (e.g. Zambia, UTC+2).
+function isSameLocalDay(d: Date, ref: Date) {
+  return (
+    d.getFullYear() === ref.getFullYear() &&
+    d.getMonth() === ref.getMonth() &&
+    d.getDate() === ref.getDate()
+  );
+}
+
+function isSameLocalMonth(d: Date, ref: Date) {
+  return d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
+}
+
+function Summary() {
+  const now = new Date();
+  const { data: sales = [] } = useQuery({
+    queryKey: ["uniform-sales"],
+    queryFn: () => api.uniform.sales.list(),
+  });
+  const { data: items = [] } = useQuery({
+    queryKey: ["uniform-items"],
+    queryFn: () => api.uniform.items.list(),
+  });
+  const today = sales
+    .filter((s) => s.createdAt && isSameLocalDay(new Date(s.createdAt), now))
+    .reduce((a, s) => a + Number(s.total), 0);
+  const month = sales
+    .filter((s) => s.createdAt && isSameLocalMonth(new Date(s.createdAt), now))
+    .reduce((a, s) => a + Number(s.total), 0);
+  return (
+    <div className="grid gap-3 sm:grid-cols-3">
+      <Card>
+        <CardContent className="p-4">
+          <p className="text-xs text-muted-foreground">Sales today</p>
+          <p className="text-2xl font-semibold text-emerald-600">{money(today)}</p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="p-4">
+          <p className="text-xs text-muted-foreground">Sales this month</p>
+          <p className="text-2xl font-semibold">{money(month)}</p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="p-4">
+          <p className="text-xs text-muted-foreground">Catalog items</p>
+          <p className="text-2xl font-semibold">{items.length}</p>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 

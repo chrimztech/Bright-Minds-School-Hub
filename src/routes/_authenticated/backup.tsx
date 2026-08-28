@@ -1,14 +1,25 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Download, DatabaseBackup, Upload, TriangleAlert } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Download, DatabaseBackup, Upload, TriangleAlert, History } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth, hasPermission } from "@/lib/auth";
+import { EmptyState } from "@/components/EmptyState";
 
 export const Route = createFileRoute("/_authenticated/backup")({
   head: () => ({ meta: [{ title: "System backup" }] }),
@@ -158,6 +169,8 @@ function BackupPage() {
           </CardContent>
         </Card>
 
+        <ScheduledBackupsCard />
+
         {canRestore && <RestoreCard />}
 
         <Card>
@@ -216,6 +229,107 @@ function BackupPage() {
   );
 }
 
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function ScheduledBackupsCard() {
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const { data: snapshots, isLoading } = useQuery({
+    queryKey: ["admin", "backup", "scheduled"],
+    queryFn: api.admin.listScheduledBackups,
+  });
+
+  async function handleDownload(filename: string) {
+    setDownloading(filename);
+    try {
+      const blob = await api.admin.downloadScheduledBackup(filename);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      toast.error(err.message ?? "Download failed");
+    } finally {
+      setDownloading(null);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="font-display text-lg flex items-center gap-2">
+          <History className="h-5 w-5" /> Automatic backups
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Snapshots the system takes on its own — a full backup every night, plus a safety copy
+          saved automatically right before any restore overwrites the system. The newest {14} are
+          kept; older ones are pruned automatically.
+        </p>
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : !snapshots || snapshots.length === 0 ? (
+          <EmptyState
+            icon={History}
+            message="No automatic snapshots yet"
+            description="The first nightly backup runs at 02:00. A safety snapshot also appears here right before any restore."
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>File</TableHead>
+                  <TableHead>Taken</TableHead>
+                  <TableHead>Size</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {snapshots.map((s) => (
+                  <TableRow key={s.filename}>
+                    <TableCell className="font-mono text-xs">
+                      {s.filename}
+                      {s.filename.startsWith("pre-restore") && (
+                        <Badge variant="outline" className="ml-2">
+                          safety net
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {new Date(s.createdAt).toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {formatBytes(s.sizeBytes)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={downloading === s.filename}
+                        onClick={() => handleDownload(s.filename)}
+                      >
+                        <Download className="h-3.5 w-3.5 mr-1" />
+                        {downloading === s.filename ? "Preparing…" : "Download"}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 const CONFIRM_PHRASE = "RESTORE";
 
 function RestoreCard() {
@@ -223,7 +337,11 @@ function RestoreCard() {
   const [file, setFile] = useState<File | null>(null);
   const [confirmText, setConfirmText] = useState("");
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ filesRestored: number; restoredAt: string } | null>(null);
+  const [result, setResult] = useState<{
+    filesRestored: number;
+    restoredAt: string;
+    safetyBackup: string;
+  } | null>(null);
 
   async function doRestore() {
     if (!file) return;
@@ -295,6 +413,11 @@ function RestoreCard() {
               Restore complete — {result.filesRestored.toLocaleString()} file(s) restored
             </p>
             <p className="text-muted-foreground">{new Date(result.restoredAt).toLocaleString()}</p>
+            <p className="text-muted-foreground">
+              Safety snapshot of what was overwritten:{" "}
+              <span className="font-mono text-xs">{result.safetyBackup}</span> (under Automatic
+              backups above)
+            </p>
             <p className="mt-1 font-medium text-destructive">
               Restart the backend now so every service picks up the restored data cleanly.
             </p>

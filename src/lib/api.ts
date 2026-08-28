@@ -620,7 +620,28 @@ export const api = {
       const text = await res.text();
       const body = text ? JSON.parse(text) : undefined;
       if (!res.ok) throw new Error(body?.message ?? "Restore failed");
-      return body as { filesRestored: number; restoredAt: string; note: string };
+      return body as {
+        filesRestored: number;
+        restoredAt: string;
+        safetyBackup: string;
+        note: string;
+      };
+    },
+    // Snapshots the system took on its own — the nightly scheduled backup, and the safety-net
+    // copy always saved right before a restore overwrites anything.
+    listScheduledBackups: () =>
+      get<{ filename: string; sizeBytes: number; createdAt: string }[]>("/admin/backup/scheduled"),
+    downloadScheduledBackup: async (filename: string) => {
+      const token = getToken();
+      const res = await fetch(
+        BASE_URL + `/admin/backup/scheduled/${encodeURIComponent(filename)}`,
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: res.statusText }));
+        throw new Error(err.message ?? "Download failed");
+      }
+      return res.blob();
     },
   },
 
