@@ -157,7 +157,7 @@ function ReportCardsPage() {
             )}
           </TabsList>
           <TabsContent value="report-card">
-            <ReportCardTab isParentOnly={isParentOnly} isTeacher={isTeacher} />
+            <ReportCardTab isParentOnly={isParentOnly} isTeacher={isTeacher} isAdmin={isAdmin} />
           </TabsContent>
           {!isParentOnly && (
             <TabsContent value="class">
@@ -176,7 +176,15 @@ function ReportCardsPage() {
 }
 
 // ─── Tab 1: Individual report card ────────────────────────────────────────────
-function ReportCardTab({ isParentOnly, isTeacher }: { isParentOnly: boolean; isTeacher: boolean }) {
+function ReportCardTab({
+  isParentOnly,
+  isTeacher,
+  isAdmin,
+}: {
+  isParentOnly: boolean;
+  isTeacher: boolean;
+  isAdmin: boolean;
+}) {
   const qc = useQueryClient();
   const [termId, setTermId] = useState("");
   const [examId, setExamId] = useState("");
@@ -406,11 +414,20 @@ function ReportCardTab({ isParentOnly, isTeacher }: { isParentOnly: boolean; isT
             </Label>
             <Textarea
               rows={2}
-              placeholder="e.g. Promoted to the next grade."
+              placeholder={
+                isAdmin ? "e.g. Promoted to the next grade." : "Only the head teacher can set this"
+              }
               value={headTeacherRemark}
               onChange={(e) => setHeadTeacherRemark(e.target.value)}
+              disabled={!isAdmin}
               className="mt-1"
             />
+            {!isAdmin && (
+              <p className="text-[11px] text-muted-foreground mt-1">
+                This is the head teacher's remark — a class teacher can only set the one on the
+                left.
+              </p>
+            )}
           </div>
           <div className="sm:col-span-2">
             <Button
@@ -689,14 +706,14 @@ function ReportCardPrint({
   const attPct = attendance.length ? Math.round((present / attendance.length) * 100) : null;
 
   return (
-    <div className="p-10 font-sans text-black text-sm">
+    <div className="p-8 font-sans text-black text-xs leading-snug">
       <DocHeader
         school={{ ...school, logoUrl: school?.logoUrl ?? "/logo.png" }}
         title="Pupil Report Card"
       />
 
       {/* Meta */}
-      <div className="flex justify-between text-xs text-gray-600 mb-5">
+      <div className="flex justify-between text-[11px] text-gray-600 mb-4">
         {term && (
           <span>
             Term: <strong>{term.name}</strong>
@@ -718,27 +735,27 @@ function ReportCardPrint({
       </div>
 
       {/* Pupil info box */}
-      <table className="w-full border border-gray-300 mb-5 text-sm">
+      <table className="w-full border border-gray-300 mb-4 text-xs">
         <tbody>
           <tr className="bg-gray-50">
-            <td className="border border-gray-300 px-3 py-1.5">
+            <td className="border border-gray-300 px-2.5 py-1">
               <span className="text-gray-500">Full name: </span>
               <strong>{pupil.fullName}</strong>
             </td>
-            <td className="border border-gray-300 px-3 py-1.5">
+            <td className="border border-gray-300 px-2.5 py-1">
               <span className="text-gray-500">Adm No: </span>
               <strong className="font-mono">{pupil.admissionNo}</strong>
             </td>
           </tr>
           <tr>
-            <td className="border border-gray-300 px-3 py-1.5">
+            <td className="border border-gray-300 px-2.5 py-1">
               <span className="text-gray-500">Class: </span>
               <strong>
                 {pupil.schoolClass?.name ?? "—"}
                 {pupil.schoolClass?.stream ? " " + pupil.schoolClass.stream : ""}
               </strong>
             </td>
-            <td className="border border-gray-300 px-3 py-1.5">
+            <td className="border border-gray-300 px-2.5 py-1">
               <span className="text-gray-500">Gender: </span>
               {pupil.gender ?? "—"}
             </td>
@@ -747,24 +764,24 @@ function ReportCardPrint({
       </table>
 
       {/* Marks table */}
-      <p className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1.5">
         Academic Performance
       </p>
-      <table className="w-full border-collapse mb-5 text-sm">
+      <table className="w-full border-collapse mb-4 text-xs">
         <thead>
           <tr className="bg-gray-100 border-b-2 border-black">
-            <th className="text-left py-2 px-2">Subject</th>
-            <th className="text-center py-2 px-2">Score</th>
-            <th className="text-center py-2 px-2">Out of</th>
-            <th className="text-center py-2 px-2">%</th>
-            <th className="text-center py-2 px-2">Grade</th>
-            <th className="text-left py-2 px-2">Remark</th>
+            <th className="text-left py-1.5 px-2">Subject</th>
+            <th className="text-center py-1.5 px-2">Score</th>
+            <th className="text-center py-1.5 px-2">Out of</th>
+            <th className="text-center py-1.5 px-2">%</th>
+            <th className="text-center py-1.5 px-2">Grade</th>
+            <th className="text-left py-1.5 px-2">Remark</th>
           </tr>
         </thead>
         <tbody>
           {marks.length === 0 ? (
             <tr>
-              <td colSpan={6} className="text-center py-4 text-gray-400">
+              <td colSpan={6} className="text-center py-3 text-gray-400">
                 No marks recorded.
               </td>
             </tr>
@@ -774,23 +791,23 @@ function ReportCardPrint({
               const mg = gradeFor(pct);
               return (
                 <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                  <td className="py-1.5 px-2 border-b border-gray-200">{m.subject?.name}</td>
-                  <td className="py-1.5 px-2 border-b border-gray-200 text-center font-mono font-semibold">
+                  <td className="py-1 px-2 border-b border-gray-200">{m.subject?.name}</td>
+                  <td className="py-1 px-2 border-b border-gray-200 text-center font-mono font-semibold">
                     {m.score}
                   </td>
-                  <td className="py-1.5 px-2 border-b border-gray-200 text-center text-gray-500">
+                  <td className="py-1 px-2 border-b border-gray-200 text-center text-gray-500">
                     {outOf}
                   </td>
-                  <td className="py-1.5 px-2 border-b border-gray-200 text-center">
+                  <td className="py-1 px-2 border-b border-gray-200 text-center">
                     {pct.toFixed(1)}%
                   </td>
                   <td
-                    className="py-1.5 px-2 border-b border-gray-200 text-center font-bold"
+                    className="py-1 px-2 border-b border-gray-200 text-center font-bold"
                     style={{ color: GC[mg.grade] ?? "#000" }}
                   >
                     {mg.grade}
                   </td>
-                  <td className="py-1.5 px-2 border-b border-gray-200 text-gray-600">
+                  <td className="py-1 px-2 border-b border-gray-200 text-gray-600">
                     {m.comment ?? mg.label}
                   </td>
                 </tr>
@@ -801,52 +818,52 @@ function ReportCardPrint({
       </table>
 
       {/* Summary */}
-      <div className="border-2 border-gray-300 rounded p-3 grid grid-cols-4 gap-4 text-center mb-5">
+      <div className="border-2 border-gray-300 rounded p-2.5 grid grid-cols-4 gap-3 text-center mb-4">
         <div>
-          <p className="text-xs text-gray-500 uppercase">Total</p>
-          <p className="text-2xl font-bold">
+          <p className="text-[10px] text-gray-500 uppercase">Total</p>
+          <p className="text-lg font-bold">
             {total}
-            <span className="text-sm text-gray-400">/{maxTotal}</span>
+            <span className="text-xs text-gray-400">/{maxTotal}</span>
           </p>
         </div>
         <div>
-          <p className="text-xs text-gray-500 uppercase">Average</p>
-          <p className="text-2xl font-bold">{avgPct.toFixed(1)}%</p>
+          <p className="text-[10px] text-gray-500 uppercase">Average</p>
+          <p className="text-lg font-bold">{avgPct.toFixed(1)}%</p>
         </div>
         <div>
-          <p className="text-xs text-gray-500 uppercase">Overall grade</p>
-          <p className="text-3xl font-bold" style={{ color: GC[g.grade] }}>
+          <p className="text-[10px] text-gray-500 uppercase">Overall grade</p>
+          <p className="text-xl font-bold" style={{ color: GC[g.grade] }}>
             {g.grade}
           </p>
-          <p className="text-xs text-gray-500">{g.label}</p>
+          <p className="text-[10px] text-gray-500">{g.label}</p>
         </div>
         <div>
-          <p className="text-xs text-gray-500 uppercase">Position</p>
-          <p className="text-2xl font-bold">{position != null ? `${position}` : "—"}</p>
-          {classSize > 0 && <p className="text-xs text-gray-400">out of {classSize}</p>}
+          <p className="text-[10px] text-gray-500 uppercase">Position</p>
+          <p className="text-lg font-bold">{position != null ? `${position}` : "—"}</p>
+          {classSize > 0 && <p className="text-[10px] text-gray-400">out of {classSize}</p>}
         </div>
       </div>
 
       {/* Attendance — always printed (not just when records exist) so it never looks like a
           missing section of the report card when attendance wasn't fully recorded that term. */}
-      <div className="border border-gray-300 rounded p-3 grid grid-cols-4 gap-3 text-center mb-5">
+      <div className="border border-gray-300 rounded p-2.5 grid grid-cols-4 gap-2.5 text-center mb-4">
         <div>
-          <p className="text-xs text-gray-500">Present</p>
+          <p className="text-[10px] text-gray-500">Present</p>
           <p className="font-bold text-green-700">{present}</p>
         </div>
         <div>
-          <p className="text-xs text-gray-500">Absent</p>
+          <p className="text-[10px] text-gray-500">Absent</p>
           <p className="font-bold text-red-600">{absent}</p>
         </div>
         <div>
-          <p className="text-xs text-gray-500">Late</p>
+          <p className="text-[10px] text-gray-500">Late</p>
           <p className="font-bold text-orange-500">{late}</p>
         </div>
         <div>
-          <p className="text-xs text-gray-500">Attendance rate</p>
+          <p className="text-[10px] text-gray-500">Attendance rate</p>
           <p className="font-bold">
             {attPct != null ? `${attPct}%` : "—"}
-            <span className="font-normal text-gray-500 text-xs">
+            <span className="font-normal text-gray-500 text-[10px]">
               {attPct != null ? ` (${present}/${attendance.length})` : ""}
             </span>
           </p>
@@ -854,23 +871,23 @@ function ReportCardPrint({
       </div>
 
       {/* Remarks */}
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <div className="border border-gray-300 rounded p-3 min-h-[56px]">
+      <div className="grid grid-cols-2 gap-3 mb-5">
+        <div className="border border-gray-300 rounded p-2.5 min-h-[44px]">
           <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">
             Class teacher's remarks
           </p>
-          <p className="text-sm">{classTeacherRemark || " "}</p>
+          <p className="text-xs">{classTeacherRemark || " "}</p>
         </div>
-        <div className="border border-gray-300 rounded p-3 min-h-[56px]">
-          <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+        <div className="border border-gray-300 rounded p-2.5 min-h-[44px]">
+          <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">
             Head teacher's remarks
           </p>
-          <p className="text-sm">{headTeacherRemark || " "}</p>
+          <p className="text-xs">{headTeacherRemark || " "}</p>
         </div>
       </div>
 
       {/* Signatures */}
-      <div className="grid grid-cols-2 gap-16 mt-8">
+      <div className="grid grid-cols-2 gap-16 mt-6">
         {[
           {
             title: "Class Teacher",
@@ -885,20 +902,20 @@ function ReportCardPrint({
         ].map(({ title, name, signatureUrl }) => (
           <div key={title}>
             {signatureUrl && (
-              <img src={signatureUrl} alt="" className="h-12 object-contain object-left" />
+              <img src={signatureUrl} alt="" className="h-10 object-contain object-left" />
             )}
-            <div className="mt-2 border-t border-black pt-2">
-              <p className="text-xs">{title}</p>
-              <p className="text-xs text-gray-400 mt-1">
+            <div className="mt-1.5 border-t border-black pt-1.5">
+              <p className="text-[11px]">{title}</p>
+              <p className="text-[10px] text-gray-400 mt-1">
                 Name: {name || "_________________________"} Sign: _____________
               </p>
-              <p className="text-xs text-gray-400 mt-1">Date: _________________________</p>
+              <p className="text-[10px] text-gray-400 mt-1">Date: _________________________</p>
             </div>
           </div>
         ))}
       </div>
 
-      <div className="mt-8 pt-4 border-t border-gray-200 flex justify-between text-xs text-gray-400">
+      <div className="mt-6 pt-3 border-t border-gray-200 flex justify-between text-[10px] text-gray-400">
         <p>Next term begins: _________________________</p>
         <p>Generated {new Date().toLocaleString()}</p>
       </div>

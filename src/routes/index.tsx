@@ -23,6 +23,7 @@ import {
   BookOpen,
   Bus,
   Facebook,
+  MessageCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
@@ -59,6 +60,18 @@ function parseImages(raw?: string): string[] {
   } catch {
     return [];
   }
+}
+
+// Builds a wa.me deep link from whatever's in the phone field — which may hold more than one
+// number ("0977192139 / 0977519221") since that's how schools naturally type it in; only the
+// first is usable as a single WhatsApp target. wa.me needs the full international number with
+// no leading zero, so a local Zambian-format number (0XXXXXXXXX) gets its leading 0 swapped
+// for the country code; a number already given in international form is left alone.
+function whatsAppLink(phone: string): string {
+  const first = phone.split(/[/,]/)[0].trim();
+  let digits = first.replace(/\D/g, "");
+  if (digits.startsWith("0")) digits = "260" + digits.slice(1);
+  return `https://wa.me/${digits}`;
 }
 
 // Fades + slides a section up the first time it scrolls into view.
@@ -498,20 +511,39 @@ function LandingPage() {
                     </div>
                   ))}
                 {landing?.phone && (
-                  <div className="flex items-center gap-3 text-white/80">
+                  <a
+                    href={`tel:${landing.phone.split(/[/,]/)[0].trim().replace(/\D/g, "")}`}
+                    className="flex items-center gap-3 text-white/80 transition-colors hover:text-white"
+                  >
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/10">
                       <Phone className="h-4 w-4" />
                     </span>
                     <span>{landing.phone}</span>
-                  </div>
+                  </a>
+                )}
+                {landing?.phone && (
+                  <a
+                    href={whatsAppLink(landing.phone)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-3 text-white/80 transition-colors hover:text-white"
+                  >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/10">
+                      <MessageCircle className="h-4 w-4" />
+                    </span>
+                    <span>Chat on WhatsApp</span>
+                  </a>
                 )}
                 {landing?.email && (
-                  <div className="flex items-center gap-3 text-white/80">
+                  <a
+                    href={`mailto:${landing.email}`}
+                    className="flex items-center gap-3 text-white/80 transition-colors hover:text-white"
+                  >
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/10">
                       <Mail className="h-4 w-4" />
                     </span>
                     <span>{landing.email}</span>
-                  </div>
+                  </a>
                 )}
                 {landing?.facebookUrl && (
                   <a
@@ -667,16 +699,33 @@ function LandingPage() {
               </p>
               <div className="mt-3.5 flex flex-col gap-2.5 text-sm">
                 {landing?.phone && (
-                  <span className="flex items-center gap-2">
+                  <a
+                    href={`tel:${landing.phone.split(/[/,]/)[0].trim().replace(/\D/g, "")}`}
+                    className="flex items-center gap-2 transition-colors hover:text-white"
+                  >
                     <Phone className="h-3.5 w-3.5 shrink-0" />
                     {landing.phone}
-                  </span>
+                  </a>
+                )}
+                {landing?.phone && (
+                  <a
+                    href={whatsAppLink(landing.phone)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-2 transition-colors hover:text-white"
+                  >
+                    <MessageCircle className="h-3.5 w-3.5 shrink-0" />
+                    WhatsApp
+                  </a>
                 )}
                 {landing?.email && (
-                  <span className="flex items-center gap-2">
+                  <a
+                    href={`mailto:${landing.email}`}
+                    className="flex items-center gap-2 transition-colors hover:text-white"
+                  >
                     <Mail className="h-3.5 w-3.5 shrink-0" />
                     {landing.email}
-                  </span>
+                  </a>
                 )}
                 {landing?.website && (
                   <a

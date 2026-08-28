@@ -591,7 +591,36 @@ export const api = {
       }
       const disposition = res.headers.get("Content-Disposition") ?? "";
       const match = /filename="([^"]+)"/.exec(disposition);
-      return { blob: await res.blob(), filename: match?.[1] ?? "school-full-backup.sql" };
+      return { blob: await res.blob(), filename: match?.[1] ?? "school-database.sql" };
+    },
+    // The one file to actually keep for disaster recovery — database + every uploaded file,
+    // in a single archive `restoreBackup` below can read straight back in.
+    backupFull: async () => {
+      const token = getToken();
+      const res = await fetch(BASE_URL + "/admin/backup/full", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: res.statusText }));
+        throw new Error(err.message ?? "Backup failed");
+      }
+      const disposition = res.headers.get("Content-Disposition") ?? "";
+      const match = /filename="([^"]+)"/.exec(disposition);
+      return { blob: await res.blob(), filename: match?.[1] ?? "school-full-backup.zip" };
+    },
+    restoreBackup: async (file: File) => {
+      const token = getToken();
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch(BASE_URL + "/admin/backup/restore", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        body: form,
+      });
+      const text = await res.text();
+      const body = text ? JSON.parse(text) : undefined;
+      if (!res.ok) throw new Error(body?.message ?? "Restore failed");
+      return body as { filesRestored: number; restoredAt: string; note: string };
     },
   },
 
