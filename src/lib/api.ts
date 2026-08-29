@@ -568,11 +568,11 @@ export const api = {
   },
 
   reportCardRemarks: {
-    get: (pupilId: string, examId: string) =>
-      get<ReportCardRemark | null>("/report-cards/remarks", { pupilId, examId }),
+    get: (pupilId: string, termId: string) =>
+      get<ReportCardRemark | null>("/report-cards/remarks", { pupilId, termId }),
     save: (data: {
       pupilId: string;
-      examId: string;
+      termId: string;
       classTeacherRemark?: string;
       headTeacherRemark?: string;
     }) => put<ReportCardRemark>("/report-cards/remarks", data),
@@ -797,7 +797,8 @@ export interface Attendance {
   classId?: string;
   notes?: string;
 }
-export type AssessmentType = "MID_TERM" | "END_OF_TERM" | "MOCK" | "OPENER" | "OTHER";
+export type AssessmentType =
+  "TEST_1" | "TEST_2" | "MID_TERM" | "END_OF_TERM" | "MOCK" | "OPENER" | "OTHER";
 export interface Exam {
   id: string;
   name: string;
@@ -945,8 +946,7 @@ export interface AttendanceSummary {
   percentage: number;
 }
 export interface PerformanceSummary {
-  examId: string;
-  examName: string;
+  termId: string;
   termName?: string;
   academicYearName?: string;
   averagePercentage: number;
@@ -968,36 +968,39 @@ export interface ParentDashboard {
   guardian: Guardian;
   children: ParentChildSummary[];
 }
-export interface ParentSubjectResult {
-  subjectId: string;
-  subjectName: string;
+export interface ParentAssessmentCell {
   score: number;
   outOf: number;
   percentage: number;
-  grade: string;
+}
+export interface ParentSubjectPivot {
+  subjectId: string;
+  subjectName: string;
+  test1?: ParentAssessmentCell | null;
+  test2?: ParentAssessmentCell | null;
+  midTerm?: ParentAssessmentCell | null;
+  endOfTerm?: ParentAssessmentCell | null;
+  averagePercentage: number | null;
+  grade: string | null;
   comment?: string;
 }
 export interface ParentReportCard {
   pupilId: string;
   pupilName: string;
   admissionNo: string;
-  examId: string;
-  examName: string;
-  assessmentType?: string;
-  examDate?: string;
-  termId?: string;
+  termId: string;
   termName?: string;
   academicYearId?: string;
   academicYearName?: string;
   schoolClass?: ParentClassInfo;
-  subjects: ParentSubjectResult[];
-  totalScore: number;
-  totalOutOf: number;
-  averagePercentage: number;
+  subjects: ParentSubjectPivot[];
+  termAveragePercentage: number;
   overallGrade: string;
   attendance: AttendanceSummary;
   classTeacherRemark?: string;
   headTeacherRemark?: string;
+  position?: number | null;
+  classSize?: number | null;
 }
 export interface PromotionRequest {
   pupilIds: string[];
@@ -1312,7 +1315,7 @@ export interface DashboardLink {
 export interface ReportCardRemark {
   id: string;
   pupil: Pupil;
-  exam: Exam;
+  term: Term;
   classTeacherRemark?: string;
   headTeacherRemark?: string;
 }

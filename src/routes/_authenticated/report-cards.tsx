@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { api, type Mark, type Pupil } from "@/lib/api";
@@ -105,6 +105,112 @@ function buildSubjectStats(marks: Mark[], outOf: number) {
     .sort((a, b) => b.avg - a.avg);
 }
 
+// ─── Term report card pivot ────────────────────────────────────────────────────
+// A term report card pivots up to 4 exams (Test 1, Test 2, Mid Term, End of Term) into one row
+// per subject. These operate on a flat Mark[] already scoped to "marks from exams in this term"
+// — each Mark carries its own exam (with assessmentType/outOf), so no separate exam list is
+// needed once the marks are in hand.
+type AssessmentKey = "TEST_1" | "TEST_2" | "MID_TERM" | "END_OF_TERM";
+const TERM_ASSESSMENT_TYPES: AssessmentKey[] = ["TEST_1", "TEST_2", "MID_TERM", "END_OF_TERM"];
+const ASSESSMENT_COLUMN_LABEL: Record<AssessmentKey, string> = {
+  TEST_1: "Test 1",
+  TEST_2: "Test 2",
+  MID_TERM: "Mid Term",
+  END_OF_TERM: "End of Term",
+};
+const ASSESSMENT_CELL_KEY: Record<AssessmentKey, "test1" | "test2" | "midTerm" | "endOfTerm"> = {
+  TEST_1: "test1",
+  TEST_2: "test2",
+  MID_TERM: "midTerm",
+  END_OF_TERM: "endOfTerm",
+};
+
+type AssessmentCell = { score: number; outOf: number; pct: number };
+type SubjectPivotRow = {
+  subjectId: string;
+  subjectName: string;
+  test1: AssessmentCell | null;
+  test2: AssessmentCell | null;
+  midTerm: AssessmentCell | null;
+  endOfTerm: AssessmentCell | null;
+  average: number | null;
+  comment?: string;
+};
+
+function pickComment(byType: Partial<Record<AssessmentKey, Mark>>): string | undefined {
+  for (const type of ["END_OF_TERM", "MID_TERM", "TEST_2", "TEST_1"] as AssessmentKey[]) {
+    const c = byType[type]?.comment;
+    if (c) return c;
+  }
+  return undefined;
+}
+
+// One pupil's marks (already scoped to one term) → one pivot row per subject.
+function pivotRowsFor(marksForPupil: Mark[]): SubjectPivotRow[] {
+  const bySubject = new Map<
+    string,
+    { name: string; byType: Partial<Record<AssessmentKey, Mark>> }
+  >();
+  for (const m of marksForPupil) {
+    const type = m.exam.assessmentType as AssessmentKey | undefined;
+    if (!type || !TERM_ASSESSMENT_TYPES.includes(type)) continue;
+    const sid = m.subject.id;
+    if (!bySubject.has(sid)) bySubject.set(sid, { name: m.subject.name, byType: {} });
+    bySubject.get(sid)!.byType[type] = m;
+  }
+  const rows = [...bySubject.entries()].map(([subjectId, { name, byType }]) => {
+    const cellFor = (type: AssessmentKey): AssessmentCell | null => {
+      const m = byType[type];
+      if (!m) return null;
+      const outOf = m.exam.outOf || 100;
+      return { score: Number(m.score), outOf, pct: (Number(m.score) / outOf) * 100 };
+    };
+    const test1 = cellFor("TEST_1");
+    const test2 = cellFor("TEST_2");
+    const midTerm = cellFor("MID_TERM");
+    const endOfTerm = cellFor("END_OF_TERM");
+    const present = [test1, test2, midTerm, endOfTerm].filter(
+      (c): c is AssessmentCell => c != null,
+    );
+    const average = present.length ? present.reduce((s, c) => s + c.pct, 0) / present.length : null;
+    return {
+      subjectId,
+      subjectName: name,
+      test1,
+      test2,
+      midTerm,
+      endOfTerm,
+      average,
+      comment: pickComment(byType),
+    };
+  });
+  rows.sort((a, b) => a.subjectName.localeCompare(b.subjectName));
+  return rows;
+}
+
+// Mean of whichever subjects have an average — missing subjects are excluded, not zeroed.
+function termAverageOf(rows: SubjectPivotRow[]): number {
+  const present = rows.map((r) => r.average).filter((a): a is number => a != null);
+  return present.length ? present.reduce((s, a) => s + a, 0) / present.length : 0;
+}
+
+// All of a class's (or a whole batch's) marks for one term → each pupil's pivot rows, term
+// average, and 1-indexed rank by that average.
+function buildTermRanked(allMarksInTerm: Mark[]) {
+  const byPupil = new Map<string, { pupil: Pupil; marks: Mark[] }>();
+  for (const m of allMarksInTerm) {
+    if (!byPupil.has(m.pupil.id)) byPupil.set(m.pupil.id, { pupil: m.pupil, marks: [] });
+    byPupil.get(m.pupil.id)!.marks.push(m);
+  }
+  return [...byPupil.values()]
+    .map(({ pupil, marks }) => {
+      const rows = pivotRowsFor(marks);
+      return { pupil, rows, average: termAverageOf(rows) };
+    })
+    .sort((a, b) => b.average - a.average)
+    .map((r, i) => ({ ...r, position: i + 1 }));
+}
+
 function gradeDist(averages: number[]) {
   return DEFAULT_BANDS.map((b) => ({
     grade: b.grade,
@@ -187,7 +293,6 @@ function ReportCardTab({
 }) {
   const qc = useQueryClient();
   const [termId, setTermId] = useState("");
-  const [examId, setExamId] = useState("");
   const [pupilId, setPupilId] = useState("");
   const [classTeacherRemark, setClassTeacherRemark] = useState("");
   const [headTeacherRemark, setHeadTeacherRemark] = useState("");
@@ -197,9 +302,9 @@ function ReportCardTab({
 
   const { data: school } = useSchool();
   const { data: savedRemark } = useQuery({
-    queryKey: ["report-card-remark", pupilId, examId],
-    enabled: !isParentOnly && !!pupilId && !!examId,
-    queryFn: () => api.reportCardRemarks.get(pupilId, examId),
+    queryKey: ["report-card-remark", pupilId, termId],
+    enabled: !isParentOnly && !!pupilId && !!termId,
+    queryFn: () => api.reportCardRemarks.get(pupilId, termId),
   });
   useEffect(() => {
     setClassTeacherRemark(savedRemark?.classTeacherRemark ?? "");
@@ -207,10 +312,10 @@ function ReportCardTab({
   }, [savedRemark]);
   const saveRemark = useMutation({
     mutationFn: () =>
-      api.reportCardRemarks.save({ pupilId, examId, classTeacherRemark, headTeacherRemark }),
+      api.reportCardRemarks.save({ pupilId, termId, classTeacherRemark, headTeacherRemark }),
     onSuccess: () => {
       toast.success("Remarks saved");
-      qc.invalidateQueries({ queryKey: ["report-card-remark", pupilId, examId] });
+      qc.invalidateQueries({ queryKey: ["report-card-remark", pupilId, termId] });
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -218,10 +323,35 @@ function ReportCardTab({
     queryKey: ["terms-all"],
     queryFn: () => api.academicYears.terms.all(),
   });
-  const { data: exams = [] } = useQuery({
+  const { data: examsForTerm = [] } = useQuery({
     queryKey: ["exams-rc", termId],
-    queryFn: () => api.exams.list(termId || undefined),
+    enabled: !!termId,
+    queryFn: () => api.exams.list(termId),
   });
+  // Only the 4 recognized assessment types feed into a term report card — an ad-hoc MOCK/OPENER/
+  // OTHER exam in the same term is analysis-only (Class/School Analysis tabs) and never appears
+  // here. Sorted into a fixed column order regardless of creation order.
+  const examsInTerm = useMemo(() => {
+    const recognized = examsForTerm.filter(
+      (e) => e.assessmentType && (TERM_ASSESSMENT_TYPES as string[]).includes(e.assessmentType),
+    );
+    return recognized.sort(
+      (a, b) =>
+        TERM_ASSESSMENT_TYPES.indexOf(a.assessmentType as AssessmentKey) -
+        TERM_ASSESSMENT_TYPES.indexOf(b.assessmentType as AssessmentKey),
+    );
+  }, [examsForTerm]);
+  // A term's report card pulls marks from up to 4 exams — fetched in parallel, reusing the same
+  // per-exam endpoint/cache key as before, so batch-printing a whole class costs at most 4 HTTP
+  // calls total (one per exam-in-term), not one per pupil.
+  const marksQueries = useQueries({
+    queries: examsInTerm.map((e) => ({
+      queryKey: ["rc-marks", e.id],
+      queryFn: () => api.exams.marks.list(e.id),
+    })),
+  });
+  const marksLoading = marksQueries.some((q) => q.isLoading);
+  const allMarksInTerm = marksQueries.flatMap((q) => q.data ?? []);
   // Same reasoning as ClassAnalysisTab: a teacher's batch-print class picker should only
   // ever list the class(es) they actually teach, matching server-side scoping.
   const { data: allClassesRc = [] } = useQuery({
@@ -247,25 +377,20 @@ function ReportCardTab({
   });
   const pupils = isParentOnly ? myChildren : allPupils;
 
-  const { data: allMarks = [] } = useQuery({
-    queryKey: ["rc-marks", examId],
-    enabled: !!examId,
-    queryFn: () => api.exams.marks.list(examId),
-  });
-
   const selectedTerm = terms.find((t) => t.id === termId);
-  const exam = exams.find((e) => e.id === examId);
   const pupil = pupils.find((p) => p.id === pupilId);
   const myMarks = useMemo(
-    () => allMarks.filter((m) => m.pupil.id === pupilId),
-    [allMarks, pupilId],
+    () => allMarksInTerm.filter((m) => m.pupil.id === pupilId),
+    [allMarksInTerm, pupilId],
   );
+  const myRows = useMemo(() => pivotRowsFor(myMarks), [myMarks]);
+  const myAverage = termAverageOf(myRows);
 
   const classMarks = useMemo(() => {
     const cid = pupil?.schoolClass?.id;
-    return cid ? allMarks.filter((m) => m.pupil.schoolClass?.id === cid) : [];
-  }, [allMarks, pupil]);
-  const ranking = useMemo(() => buildRanked(classMarks, exam?.outOf ?? 100), [classMarks, exam]);
+    return cid ? allMarksInTerm.filter((m) => m.pupil.schoolClass?.id === cid) : [];
+  }, [allMarksInTerm, pupil]);
+  const ranking = useMemo(() => buildTermRanked(classMarks), [classMarks]);
   const myRank = ranking.find((r) => r.pupil.id === pupilId);
 
   const { data: attendance = [] } = useQuery({
@@ -274,33 +399,35 @@ function ReportCardTab({
     queryFn: () => api.attendance.byPupil(pupilId, selectedTerm!.startDate, selectedTerm!.endDate),
   });
 
-  const outOf = exam?.outOf ?? 100;
-  const total = myMarks.reduce((s, m) => s + Number(m.score), 0);
-  const maxTotal = myMarks.length * outOf;
-  const avgPct = myMarks.length ? (total / maxTotal) * 100 : 0;
-
   function csvExport() {
-    const rows = [["Subject", "Score", `Out of ${outOf}`, "%", "Grade", "Remark"]];
-    myMarks.forEach((m) => {
-      const pct = (Number(m.score) / outOf) * 100;
-      const g = gradeFor(pct);
+    const rows = [
+      [
+        "Subject",
+        ...TERM_ASSESSMENT_TYPES.map((t) => `${ASSESSMENT_COLUMN_LABEL[t]} (%)`),
+        "Average (%)",
+        "Comment",
+      ],
+    ];
+    myRows.forEach((r) => {
       rows.push([
-        m.subject?.name ?? "",
-        String(m.score),
-        String(outOf),
-        pct.toFixed(1) + "%",
-        g.grade,
-        m.comment ?? g.label,
+        r.subjectName,
+        ...TERM_ASSESSMENT_TYPES.map((t) => {
+          const cell = r[ASSESSMENT_CELL_KEY[t]];
+          return cell ? cell.pct.toFixed(1) + "%" : "—";
+        }),
+        r.average != null ? r.average.toFixed(1) + "%" : "—",
+        r.comment ?? "",
       ]);
     });
-    toCsv(rows, `report-card-${pupil?.admissionNo}-${exam?.name}.csv`);
+    toCsv(rows, `report-card-${pupil?.admissionNo}-${selectedTerm?.name}.csv`);
   }
 
   const batchMarks = useMemo(
-    () => (batchClassId ? allMarks.filter((m) => m.pupil.schoolClass?.id === batchClassId) : []),
-    [allMarks, batchClassId],
+    () =>
+      batchClassId ? allMarksInTerm.filter((m) => m.pupil.schoolClass?.id === batchClassId) : [],
+    [allMarksInTerm, batchClassId],
   );
-  const batchRanked = useMemo(() => buildRanked(batchMarks, outOf), [batchMarks, outOf]);
+  const batchRanked = useMemo(() => buildTermRanked(batchMarks), [batchMarks]);
 
   const { data: batchAttendance = [] } = useQuery({
     queryKey: ["att-rc-batch", batchClassId, selectedTerm?.id],
@@ -318,7 +445,7 @@ function ReportCardTab({
     return m;
   }, [batchAttendance]);
 
-  const ready = !!pupilId && !!examId && pupil && exam;
+  const ready = !!pupilId && !!termId && !!pupil && !!selectedTerm;
 
   return (
     <div className="space-y-5">
@@ -326,38 +453,15 @@ function ReportCardTab({
       <div className="flex flex-wrap gap-3 items-end">
         <div>
           <Label className="text-xs text-muted-foreground">Term</Label>
-          <Select
-            value={termId}
-            onValueChange={(v) => {
-              setTermId(v);
-              setExamId("");
-            }}
-          >
+          <Select value={termId} onValueChange={setTermId}>
             <SelectTrigger className="w-48">
-              <SelectValue placeholder="All terms" />
+              <SelectValue placeholder="Select term" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All terms</SelectItem>
               {terms.map((t) => (
                 <SelectItem key={t.id} value={t.id}>
                   {t.name}
                   {t.academicYear ? ` — ${t.academicYear.name}` : ""}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label className="text-xs text-muted-foreground">Exam / Assessment</Label>
-          <Select value={examId} onValueChange={setExamId}>
-            <SelectTrigger className="w-56">
-              <SelectValue placeholder="Select exam" />
-            </SelectTrigger>
-            <SelectContent>
-              {exams.map((e) => (
-                <SelectItem key={e.id} value={e.id}>
-                  {e.name}
-                  {e.assessmentType ? ` (${e.assessmentType.replace("_", " ")})` : ""}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -454,9 +558,8 @@ function ReportCardTab({
                   <p className="text-xs italic text-muted-foreground">"{school.motto}"</p>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  Pupil Report Card — {exam.name}
-                  {exam.assessmentType ? ` (${exam.assessmentType.replace("_", " ")})` : ""}
-                  {selectedTerm ? ` · ${selectedTerm.name}` : ""}
+                  Pupil Report Card — {selectedTerm.name}
+                  {selectedTerm.academicYear ? ` · ${selectedTerm.academicYear.name}` : ""}
                 </p>
               </div>
             </div>
@@ -483,18 +586,10 @@ function ReportCardTab({
                 <span className="text-muted-foreground">Gender: </span>
                 <span>{pupil.gender ?? "—"}</span>
               </div>
-              {exam.examDate && (
-                <div>
-                  <span className="text-muted-foreground">Date: </span>
-                  <span>{exam.examDate}</span>
-                </div>
-              )}
-              {selectedTerm && (
-                <div>
-                  <span className="text-muted-foreground">Academic Year: </span>
-                  <span>{selectedTerm.academicYear?.name ?? "—"}</span>
-                </div>
-              )}
+              <div>
+                <span className="text-muted-foreground">Academic Year: </span>
+                <span>{selectedTerm.academicYear?.name ?? "—"}</span>
+              </div>
             </div>
 
             {/* Marks table */}
@@ -502,62 +597,88 @@ function ReportCardTab({
               <TableHeader>
                 <TableRow className="bg-muted/40">
                   <TableHead>Subject</TableHead>
-                  <TableHead className="text-right">Score</TableHead>
-                  <TableHead className="text-right">%</TableHead>
-                  <TableHead>Grade</TableHead>
-                  <TableHead>Remark</TableHead>
+                  {TERM_ASSESSMENT_TYPES.map((t) => (
+                    <TableHead key={t} className="text-right">
+                      {ASSESSMENT_COLUMN_LABEL[t]} (%)
+                    </TableHead>
+                  ))}
+                  <TableHead className="text-right">Average (%)</TableHead>
+                  <TableHead>Comment</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {myMarks.length === 0 ? (
+                {marksLoading ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground py-6">
-                      No marks recorded for this exam.
+                    <TableCell
+                      colSpan={TERM_ASSESSMENT_TYPES.length + 3}
+                      className="text-center text-muted-foreground py-6"
+                    >
+                      Loading marks…
+                    </TableCell>
+                  </TableRow>
+                ) : examsInTerm.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={TERM_ASSESSMENT_TYPES.length + 3}
+                      className="text-center text-muted-foreground py-6"
+                    >
+                      No Test 1 / Test 2 / Mid Term / End of Term exams have been created for this
+                      term yet.
+                    </TableCell>
+                  </TableRow>
+                ) : myRows.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={TERM_ASSESSMENT_TYPES.length + 3}
+                      className="text-center text-muted-foreground py-6"
+                    >
+                      No marks recorded for this pupil this term.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  myMarks.map((m, i) => {
-                    const pct = (Number(m.score) / outOf) * 100;
-                    const g = gradeFor(pct);
-                    return (
-                      <TableRow key={i}>
-                        <TableCell className="font-medium">{m.subject?.name}</TableCell>
-                        <TableCell className="text-right font-mono">
-                          {m.score}/{outOf}
-                        </TableCell>
-                        <TableCell className="text-right">{pct.toFixed(1)}%</TableCell>
-                        <TableCell>
-                          <span className="font-bold text-sm" style={{ color: GC[g.grade] }}>
-                            {g.grade}
+                  myRows.map((r) => (
+                    <TableRow key={r.subjectId}>
+                      <TableCell className="font-medium">{r.subjectName}</TableCell>
+                      {TERM_ASSESSMENT_TYPES.map((t) => {
+                        const cell = r[ASSESSMENT_CELL_KEY[t]];
+                        return (
+                          <TableCell key={t} className="text-right font-mono">
+                            {cell ? `${cell.pct.toFixed(1)}%` : "—"}
+                          </TableCell>
+                        );
+                      })}
+                      <TableCell className="text-right font-semibold">
+                        {r.average != null ? (
+                          <span style={{ color: GC[gradeFor(r.average).grade] }}>
+                            {r.average.toFixed(1)}%
                           </span>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground text-sm">
-                          {m.comment ?? g.label}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {r.comment ?? (r.average != null ? gradeFor(r.average).label : "—")}
+                      </TableCell>
+                    </TableRow>
+                  ))
                 )}
               </TableBody>
             </Table>
 
             {/* Summary row */}
-            {myMarks.length > 0 && (
-              <div className="grid grid-cols-4 gap-3 border rounded-lg p-3 bg-muted/20 text-center">
-                <div>
-                  <p className="text-xs text-muted-foreground">Total</p>
-                  <p className="text-lg font-bold">
-                    {total}/{maxTotal}
-                  </p>
-                </div>
+            {myRows.length > 0 && (
+              <div className="grid grid-cols-3 gap-3 border rounded-lg p-3 bg-muted/20 text-center">
                 <div>
                   <p className="text-xs text-muted-foreground">Average</p>
-                  <p className="text-lg font-bold">{avgPct.toFixed(1)}%</p>
+                  <p className="text-lg font-bold">{myAverage.toFixed(1)}%</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Grade</p>
-                  <p className="text-2xl font-bold" style={{ color: GC[gradeFor(avgPct).grade] }}>
-                    {gradeFor(avgPct).grade}
+                  <p
+                    className="text-2xl font-bold"
+                    style={{ color: GC[gradeFor(myAverage).grade] }}
+                  >
+                    {gradeFor(myAverage).grade}
                   </p>
                 </div>
                 <div>
@@ -608,7 +729,7 @@ function ReportCardTab({
       )}
 
       {/* Batch print section */}
-      {!isParentOnly && examId && (
+      {!isParentOnly && termId && (
         <div className="flex items-center gap-3 pt-2 border-t">
           <span className="text-sm text-muted-foreground">Batch print:</span>
           <Select value={batchClassId} onValueChange={setBatchClassId}>
@@ -641,9 +762,9 @@ function ReportCardTab({
           <ReportCardPrint
             school={school}
             pupil={pupil}
-            exam={exam}
-            marks={myMarks}
             term={selectedTerm}
+            subjectRows={myRows}
+            termAverage={myAverage}
             attendance={attendance}
             position={myRank?.position ?? null}
             classSize={ranking.length}
@@ -654,9 +775,9 @@ function ReportCardTab({
       )}
 
       {/* Batch print overlay */}
-      {batchOpen && exam && (
+      {batchOpen && selectedTerm && (
         <PrintOverlay onClose={() => setBatchOpen(false)}>
-          {batchRanked.map(({ pupil: p, marks: pm, position, average }, i) => (
+          {batchRanked.map(({ pupil: p, rows, average, position }, i) => (
             <div
               key={p.id}
               style={{ pageBreakAfter: i < batchRanked.length - 1 ? "always" : "auto" }}
@@ -664,9 +785,9 @@ function ReportCardTab({
               <ReportCardPrint
                 school={school}
                 pupil={p}
-                exam={exam}
-                marks={pm}
                 term={selectedTerm}
+                subjectRows={rows}
+                termAverage={average}
                 attendance={batchAttendanceByPupil.get(p.id) ?? []}
                 position={position}
                 classSize={batchRanked.length}
@@ -685,9 +806,9 @@ function ReportCardTab({
 function ReportCardPrint({
   school,
   pupil,
-  exam,
-  marks,
   term,
+  subjectRows,
+  termAverage,
   attendance,
   position,
   classSize,
@@ -695,11 +816,11 @@ function ReportCardPrint({
   headTeacherRemark,
 }: any) {
   const classTeacher = pupil.schoolClass?.classTeacher;
-  const outOf = exam.outOf;
-  const total = marks.reduce((s: number, m: Mark) => s + Number(m.score), 0);
-  const maxTotal = marks.length * outOf;
-  const avgPct = marks.length ? (total / maxTotal) * 100 : 0;
-  const g = gradeFor(avgPct);
+  const rows: SubjectPivotRow[] = subjectRows;
+  const subjectsWithData = rows.filter((r) => r.average != null);
+  const totalOfAverages = subjectsWithData.reduce((s, r) => s + (r.average ?? 0), 0);
+  const maxTotal = subjectsWithData.length * 100;
+  const g = gradeFor(termAverage);
   const present = attendance.filter((a: any) => a.status === "PRESENT").length;
   const absent = attendance.filter((a: any) => a.status === "ABSENT").length;
   const late = attendance.filter((a: any) => a.status === "LATE").length;
@@ -714,22 +835,16 @@ function ReportCardPrint({
 
       {/* Meta */}
       <div className="flex justify-between text-[11px] text-gray-600 mb-4">
-        {term && (
-          <span>
-            Term: <strong>{term.name}</strong>
-            {term.academicYear ? ` · ${term.academicYear.name}` : ""}
-          </span>
-        )}
         <span>
-          Assessment:{" "}
-          <strong>
-            {exam.name}
-            {exam.assessmentType ? ` (${exam.assessmentType.replace("_", " ")})` : ""}
-          </strong>
+          Term: <strong>{term.name}</strong>
+          {term.academicYear ? ` · ${term.academicYear.name}` : ""}
         </span>
-        {exam.examDate && (
+        {term.startDate && term.endDate && (
           <span>
-            Date: <strong>{exam.examDate}</strong>
+            Report period:{" "}
+            <strong>
+              {term.startDate} – {term.endDate}
+            </strong>
           </span>
         )}
       </div>
@@ -771,44 +886,50 @@ function ReportCardPrint({
         <thead>
           <tr className="bg-gray-100 border-b-2 border-black">
             <th className="text-left py-1.5 px-2">Subject</th>
-            <th className="text-center py-1.5 px-2">Score</th>
-            <th className="text-center py-1.5 px-2">Out of</th>
-            <th className="text-center py-1.5 px-2">%</th>
-            <th className="text-center py-1.5 px-2">Grade</th>
-            <th className="text-left py-1.5 px-2">Remark</th>
+            {TERM_ASSESSMENT_TYPES.map((t) => (
+              <th key={t} className="text-center py-1.5 px-2">
+                {ASSESSMENT_COLUMN_LABEL[t]} (%)
+              </th>
+            ))}
+            <th className="text-center py-1.5 px-2">Average (%)</th>
+            <th className="text-left py-1.5 px-2">Comment</th>
           </tr>
         </thead>
         <tbody>
-          {marks.length === 0 ? (
+          {rows.length === 0 ? (
             <tr>
-              <td colSpan={6} className="text-center py-3 text-gray-400">
+              <td
+                colSpan={TERM_ASSESSMENT_TYPES.length + 3}
+                className="text-center py-3 text-gray-400"
+              >
                 No marks recorded.
               </td>
             </tr>
           ) : (
-            marks.map((m: Mark, i: number) => {
-              const pct = (Number(m.score) / outOf) * 100;
-              const mg = gradeFor(pct);
+            rows.map((r, i) => {
+              const mg = r.average != null ? gradeFor(r.average) : null;
               return (
-                <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                  <td className="py-1 px-2 border-b border-gray-200">{m.subject?.name}</td>
-                  <td className="py-1 px-2 border-b border-gray-200 text-center font-mono font-semibold">
-                    {m.score}
-                  </td>
-                  <td className="py-1 px-2 border-b border-gray-200 text-center text-gray-500">
-                    {outOf}
-                  </td>
-                  <td className="py-1 px-2 border-b border-gray-200 text-center">
-                    {pct.toFixed(1)}%
-                  </td>
+                <tr key={r.subjectId} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                  <td className="py-1 px-2 border-b border-gray-200">{r.subjectName}</td>
+                  {TERM_ASSESSMENT_TYPES.map((t) => {
+                    const cell = r[ASSESSMENT_CELL_KEY[t]];
+                    return (
+                      <td
+                        key={t}
+                        className="py-1 px-2 border-b border-gray-200 text-center font-mono"
+                      >
+                        {cell ? `${cell.pct.toFixed(1)}%` : "—"}
+                      </td>
+                    );
+                  })}
                   <td
                     className="py-1 px-2 border-b border-gray-200 text-center font-bold"
-                    style={{ color: GC[mg.grade] ?? "#000" }}
+                    style={{ color: mg ? (GC[mg.grade] ?? "#000") : "#000" }}
                   >
-                    {mg.grade}
+                    {r.average != null ? `${r.average.toFixed(1)}%` : "—"}
                   </td>
                   <td className="py-1 px-2 border-b border-gray-200 text-gray-600">
-                    {m.comment ?? mg.label}
+                    {r.comment ?? mg?.label ?? "—"}
                   </td>
                 </tr>
               );
@@ -820,15 +941,15 @@ function ReportCardPrint({
       {/* Summary */}
       <div className="border-2 border-gray-300 rounded p-2.5 grid grid-cols-4 gap-3 text-center mb-4">
         <div>
-          <p className="text-[10px] text-gray-500 uppercase">Total</p>
+          <p className="text-[10px] text-gray-500 uppercase">Total marks</p>
           <p className="text-lg font-bold">
-            {total}
+            {totalOfAverages.toFixed(0)}
             <span className="text-xs text-gray-400">/{maxTotal}</span>
           </p>
         </div>
         <div>
           <p className="text-[10px] text-gray-500 uppercase">Average</p>
-          <p className="text-lg font-bold">{avgPct.toFixed(1)}%</p>
+          <p className="text-lg font-bold">{termAverage.toFixed(1)}%</p>
         </div>
         <div>
           <p className="text-[10px] text-gray-500 uppercase">Overall grade</p>

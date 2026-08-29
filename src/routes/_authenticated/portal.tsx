@@ -533,7 +533,7 @@ function PerformanceTab({ pupils }: { pupils: any[] }) {
     enabled: !!selectedPupilId,
     queryFn: () => api.guardians.childReportCards(selectedPupilId),
   });
-  const report = reportCards.find((card) => card.examId === reportId) ?? reportCards[0];
+  const report = reportCards.find((card) => card.termId === reportId) ?? reportCards[0];
 
   return (
     <Card className="mt-3">
@@ -562,7 +562,7 @@ function PerformanceTab({ pupils }: { pupils: any[] }) {
               </SelectContent>
             </Select>
             <Select
-              value={report?.examId ?? ""}
+              value={report?.termId ?? ""}
               onValueChange={setReportId}
               disabled={!reportCards.length}
             >
@@ -571,9 +571,8 @@ function PerformanceTab({ pupils }: { pupils: any[] }) {
               </SelectTrigger>
               <SelectContent>
                 {reportCards.map((card) => (
-                  <SelectItem key={card.examId} value={card.examId}>
-                    {card.examName}
-                    {card.termName ? ` · ${card.termName}` : ""}
+                  <SelectItem key={card.termId} value={card.termId}>
+                    {card.termName ?? "Term"}
                     {card.academicYearName ? ` · ${card.academicYearName}` : ""}
                   </SelectItem>
                 ))}
@@ -604,26 +603,25 @@ function ParentReportCardView({ report }: { report: ParentReportCard }) {
       <div className="rounded-xl border bg-muted/20 p-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <p className="text-xs text-muted-foreground">Report</p>
-          <p className="font-semibold">{report.examName}</p>
-          <p className="text-xs text-muted-foreground">
-            {report.termName ?? ""} {report.academicYearName ?? ""}
-          </p>
+          <p className="font-semibold">{report.termName ?? "Term"}</p>
+          <p className="text-xs text-muted-foreground">{report.academicYearName ?? ""}</p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Grade / class</p>
           <p className="font-semibold">
             {report.schoolClass?.name ?? "—"} {report.schoolClass?.stream ?? ""}
           </p>
-          <p className="text-xs text-muted-foreground">
-            {report.examDate ? new Date(report.examDate).toLocaleDateString() : ""}
-          </p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Overall result</p>
           <p className="font-semibold text-lg">
-            {report.averagePercentage.toFixed(1)}% · Grade {report.overallGrade}
+            {report.termAveragePercentage.toFixed(1)}% · Grade {report.overallGrade}
           </p>
-          <p className="text-xs text-muted-foreground">{report.subjects.length} subjects</p>
+          <p className="text-xs text-muted-foreground">
+            {report.subjects.length} subjects
+            {report.position != null &&
+              ` · Position ${report.position}${report.classSize ? ` / ${report.classSize}` : ""}`}
+          </p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Term attendance</p>
@@ -649,10 +647,13 @@ function ParentReportCardView({ report }: { report: ParentReportCard }) {
           <TableHeader>
             <TableRow>
               <TableHead>Subject</TableHead>
-              <TableHead>Score</TableHead>
-              <TableHead>Percentage</TableHead>
+              <TableHead>Test 1 (%)</TableHead>
+              <TableHead>Test 2 (%)</TableHead>
+              <TableHead>Mid Term (%)</TableHead>
+              <TableHead>End of Term (%)</TableHead>
+              <TableHead>Average (%)</TableHead>
               <TableHead>Grade</TableHead>
-              <TableHead>Teacher comment</TableHead>
+              <TableHead>Comment</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -660,21 +661,36 @@ function ParentReportCardView({ report }: { report: ParentReportCard }) {
               <TableRow key={subject.subjectId}>
                 <TableCell className="font-medium">{subject.subjectName}</TableCell>
                 <TableCell>
-                  {subject.score} / {subject.outOf}
+                  {subject.test1 ? `${subject.test1.percentage.toFixed(1)}%` : "—"}
                 </TableCell>
-                <TableCell>{subject.percentage.toFixed(1)}%</TableCell>
                 <TableCell>
-                  <Badge
-                    variant={
-                      subject.percentage >= 75
-                        ? "default"
-                        : subject.percentage >= 50
-                          ? "secondary"
-                          : "destructive"
-                    }
-                  >
-                    {subject.grade}
-                  </Badge>
+                  {subject.test2 ? `${subject.test2.percentage.toFixed(1)}%` : "—"}
+                </TableCell>
+                <TableCell>
+                  {subject.midTerm ? `${subject.midTerm.percentage.toFixed(1)}%` : "—"}
+                </TableCell>
+                <TableCell>
+                  {subject.endOfTerm ? `${subject.endOfTerm.percentage.toFixed(1)}%` : "—"}
+                </TableCell>
+                <TableCell className="font-semibold">
+                  {subject.averagePercentage != null
+                    ? `${subject.averagePercentage.toFixed(1)}%`
+                    : "—"}
+                </TableCell>
+                <TableCell>
+                  {subject.grade && (
+                    <Badge
+                      variant={
+                        subject.averagePercentage != null && subject.averagePercentage >= 75
+                          ? "default"
+                          : subject.averagePercentage != null && subject.averagePercentage >= 50
+                            ? "secondary"
+                            : "destructive"
+                      }
+                    >
+                      {subject.grade}
+                    </Badge>
+                  )}
                 </TableCell>
                 <TableCell className="text-muted-foreground">{subject.comment ?? "—"}</TableCell>
               </TableRow>
@@ -730,24 +746,10 @@ function ParentReportCardPrint({ school, report }: { school: any; report: Parent
       />
 
       <div className="flex justify-between text-[11px] text-gray-600 mb-4">
-        {report.termName && (
-          <span>
-            Term: <strong>{report.termName}</strong>
-            {report.academicYearName ? ` · ${report.academicYearName}` : ""}
-          </span>
-        )}
         <span>
-          Assessment:{" "}
-          <strong>
-            {report.examName}
-            {report.assessmentType ? ` (${report.assessmentType.replace("_", " ")})` : ""}
-          </strong>
+          Term: <strong>{report.termName ?? "—"}</strong>
+          {report.academicYearName ? ` · ${report.academicYearName}` : ""}
         </span>
-        {report.examDate && (
-          <span>
-            Date: <strong>{new Date(report.examDate).toLocaleDateString()}</strong>
-          </span>
-        )}
       </div>
 
       <table className="w-full border border-gray-300 mb-4 text-xs">
@@ -781,17 +783,18 @@ function ParentReportCardPrint({ school, report }: { school: any; report: Parent
         <thead>
           <tr className="bg-gray-100 border-b-2 border-black">
             <th className="text-left py-1.5 px-2">Subject</th>
-            <th className="text-center py-1.5 px-2">Score</th>
-            <th className="text-center py-1.5 px-2">Out of</th>
-            <th className="text-center py-1.5 px-2">%</th>
-            <th className="text-center py-1.5 px-2">Grade</th>
+            <th className="text-center py-1.5 px-2">Test 1 (%)</th>
+            <th className="text-center py-1.5 px-2">Test 2 (%)</th>
+            <th className="text-center py-1.5 px-2">Mid Term (%)</th>
+            <th className="text-center py-1.5 px-2">End of Term (%)</th>
+            <th className="text-center py-1.5 px-2">Average (%)</th>
             <th className="text-left py-1.5 px-2">Comment</th>
           </tr>
         </thead>
         <tbody>
           {report.subjects.length === 0 ? (
             <tr>
-              <td colSpan={6} className="text-center py-3 text-gray-400">
+              <td colSpan={7} className="text-center py-3 text-gray-400">
                 No marks recorded.
               </td>
             </tr>
@@ -799,20 +802,23 @@ function ParentReportCardPrint({ school, report }: { school: any; report: Parent
             report.subjects.map((s, i) => (
               <tr key={s.subjectId} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                 <td className="py-1 px-2 border-b border-gray-200">{s.subjectName}</td>
-                <td className="py-1 px-2 border-b border-gray-200 text-center font-mono font-semibold">
-                  {s.score}
+                <td className="py-1 px-2 border-b border-gray-200 text-center font-mono">
+                  {s.test1 ? `${s.test1.percentage.toFixed(1)}%` : "—"}
                 </td>
-                <td className="py-1 px-2 border-b border-gray-200 text-center text-gray-500">
-                  {s.outOf}
+                <td className="py-1 px-2 border-b border-gray-200 text-center font-mono">
+                  {s.test2 ? `${s.test2.percentage.toFixed(1)}%` : "—"}
                 </td>
-                <td className="py-1 px-2 border-b border-gray-200 text-center">
-                  {s.percentage.toFixed(1)}%
+                <td className="py-1 px-2 border-b border-gray-200 text-center font-mono">
+                  {s.midTerm ? `${s.midTerm.percentage.toFixed(1)}%` : "—"}
+                </td>
+                <td className="py-1 px-2 border-b border-gray-200 text-center font-mono">
+                  {s.endOfTerm ? `${s.endOfTerm.percentage.toFixed(1)}%` : "—"}
                 </td>
                 <td
                   className="py-1 px-2 border-b border-gray-200 text-center font-bold"
-                  style={{ color: GC[s.grade] ?? "#000" }}
+                  style={{ color: (s.grade && GC[s.grade]) ?? "#000" }}
                 >
-                  {s.grade}
+                  {s.averagePercentage != null ? `${s.averagePercentage.toFixed(1)}%` : "—"}
                 </td>
                 <td className="py-1 px-2 border-b border-gray-200 text-gray-600">
                   {s.comment ?? "—"}
@@ -823,23 +829,37 @@ function ParentReportCardPrint({ school, report }: { school: any; report: Parent
         </tbody>
       </table>
 
-      <div className="border-2 border-gray-300 rounded p-2.5 grid grid-cols-3 gap-3 text-center mb-4">
+      <div className="border-2 border-gray-300 rounded p-2.5 grid grid-cols-4 gap-3 text-center mb-4">
         <div>
-          <p className="text-[10px] text-gray-500 uppercase">Total</p>
+          <p className="text-[10px] text-gray-500 uppercase">Total marks</p>
           <p className="text-lg font-bold">
-            {report.totalScore}
-            <span className="text-xs text-gray-400">/{report.totalOutOf}</span>
+            {report.subjects
+              .filter((s) => s.averagePercentage != null)
+              .reduce((sum, s) => sum + (s.averagePercentage ?? 0), 0)
+              .toFixed(0)}
+            <span className="text-xs text-gray-400">
+              /{report.subjects.filter((s) => s.averagePercentage != null).length * 100}
+            </span>
           </p>
         </div>
         <div>
           <p className="text-[10px] text-gray-500 uppercase">Average</p>
-          <p className="text-lg font-bold">{report.averagePercentage.toFixed(1)}%</p>
+          <p className="text-lg font-bold">{report.termAveragePercentage.toFixed(1)}%</p>
         </div>
         <div>
           <p className="text-[10px] text-gray-500 uppercase">Overall grade</p>
           <p className="text-xl font-bold" style={{ color: GC[report.overallGrade] ?? "#000" }}>
             {report.overallGrade}
           </p>
+        </div>
+        <div>
+          <p className="text-[10px] text-gray-500 uppercase">Position</p>
+          <p className="text-lg font-bold">
+            {report.position != null ? `${report.position}` : "—"}
+          </p>
+          {!!report.classSize && (
+            <p className="text-[10px] text-gray-400">out of {report.classSize}</p>
+          )}
         </div>
       </div>
 
