@@ -279,6 +279,10 @@ export const api = {
       method?: string;
       reference?: string;
     }) => post<Payment>("/guardians/me/payments", data),
+    payOnline: (data: { invoiceId: string; amount: number; phone: string; operator: string }) =>
+      post<GatewayTransaction>("/guardians/me/payments/lenco", data),
+    lencoPaymentStatus: (reference: string) =>
+      get<GatewayTransaction>(`/guardians/me/payments/lenco/${reference}`),
     myAttendance: (from: string, to: string) =>
       get<Attendance[]>("/guardians/me/attendance", { from, to }),
     myMarks: (examId: string) => get<Mark[]>("/guardians/me/marks", { examId }),
@@ -859,6 +863,21 @@ export interface Payment {
   status: "PENDING" | "CONFIRMED" | "REJECTED";
   submittedBy?: Guardian;
   rejectionReason?: string;
+}
+export interface GatewayTransaction {
+  id: string;
+  provider: string;
+  reference: string;
+  lencoId?: string;
+  lencoReference?: string;
+  invoice?: Invoice;
+  guardian?: Guardian;
+  phone: string;
+  operator: string;
+  amount: number;
+  status: "PENDING" | "SUCCESSFUL" | "FAILED";
+  paymentId?: string;
+  failureReason?: string;
 }
 export interface Announcement {
   id: string;
