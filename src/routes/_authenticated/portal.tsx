@@ -43,13 +43,12 @@ import {
   TrendingUp,
   UserRound,
   FileText,
-  CreditCard,
   Download,
   Printer,
-  Smartphone,
 } from "lucide-react";
 import { PrintOverlay, DocHeader, useSchool } from "@/components/PrintableDoc";
 import { ReceiptPrint } from "@/components/ReceiptPrint";
+import { PayOnlineDialog } from "@/components/PayOnlineDialog";
 
 const GC: Record<string, string> = {
   A: "#16a34a",
@@ -66,6 +65,7 @@ export const Route = createFileRoute("/_authenticated/portal")({
 });
 
 function ParentPortal() {
+  const qc = useQueryClient();
   const { user } = useAuth();
   const [receiptFor, setReceiptFor] = useState<Payment | null>(null);
 
@@ -400,10 +400,19 @@ function ParentPortal() {
                             </TableCell>
                             <TableCell>
                               {bal > 0 && (
-                                <div className="flex items-center gap-2">
-                                  <PayOnlineDialog invoice={i} />
-                                  <SubmitPaymentDialog invoice={i} />
-                                </div>
+                                <PayOnlineDialog
+                                  invoice={i}
+                                  initiate={(data) =>
+                                    api.guardians.payOnline({ invoiceId: i.id, ...data })
+                                  }
+                                  checkStatus={(reference) =>
+                                    api.guardians.lencoPaymentStatus(reference)
+                                  }
+                                  onSuccess={() => {
+                                    qc.invalidateQueries({ queryKey: ["my-invoices"] });
+                                    qc.invalidateQueries({ queryKey: ["my-payment-claims"] });
+                                  }}
+                                />
                               )}
                             </TableCell>
                           </TableRow>
@@ -946,267 +955,6 @@ function ParentReportCardPrint({ school, report }: { school: any; report: Parent
         <p>Generated {new Date().toLocaleString()}</p>
       </div>
     </div>
-  );
-}
-
-function SubmitPaymentDialog({ invoice }: { invoice: Invoice }) {
-  const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const balance = Number(invoice.total) - Number(invoice.paid);
-  const [f, setF] = useState({ amount: balance, method: "BANK", reference: "" });
-  const submit = useMutation({
-    mutationFn: () =>
-      api.guardians.submitPayment({
-        invoiceId: invoice.id,
-        amount: f.amount,
-        method: f.method,
-        reference: f.reference || undefined,
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["my-payment-claims"] });
-      toast.success("Payment submitted — the school will confirm it shortly");
-      setOpen(false);
-    },
-    onError: (e: any) => toast.error(e.message),
-  });
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(v) => {
-        setOpen(v);
-        if (v) setF({ amount: balance, method: "BANK", reference: "" });
-      }}
-    >
-      <DialogTrigger asChild>
-        <Button size="sm" variant="outline">
-          <CreditCard className="h-3.5 w-3.5 mr-1" /> I've paid
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Submit a payment</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            Invoice <span className="font-mono text-foreground">{invoice.invoiceNo}</span> — balance{" "}
-            {money(balance)}. Let the school know you've paid; they'll confirm it against your
-            account.
-          </p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>Amount paid</Label>
-              <Input
-                type="number"
-                value={f.amount}
-                onChange={(e) => setF({ ...f, amount: Number(e.target.value) })}
-              />
-            </div>
-            <div>
-              <Label>Method</Label>
-              <Select value={f.method} onValueChange={(v) => setF({ ...f, method: v })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {["BANK", "MOBILE_MONEY", "CASH", "CARD", "CHEQUE", "ONLINE"].map((m) => (
-                    <SelectItem key={m} value={m}>
-                      {m.replace("_", " ")}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div>
-            <Label>Reference / transaction ID</Label>
-            <Input
-              value={f.reference}
-              onChange={(e) => setF({ ...f, reference: e.target.value })}
-              placeholder="e.g. bank transfer reference or mobile money code"
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button
-            onClick={() => submit.mutate()}
-            disabled={!f.amount || f.amount <= 0 || submit.isPending}
-          >
-            {submit.isPending ? "Submitting…" : "Submit"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-const MOBILE_MONEY_OPERATORS = [
-  { value: "airtel", label: "Airtel Money" },
-  { value: "mtn", label: "MTN Mobile Money" },
-  { value: "zamtel", label: "Zamtel Kwacha" },
-];
-
-// Mobile money via Lenco — unlike SubmitPaymentDialog (a manual claim an admin later
-// confirms), this is confirmed automatically once the gateway itself reports success.
-// The backend's checkStatus always re-queries Lenco live, so polling here just repeatedly
-// asks "has it happened yet?" rather than trusting any locally-cached status.
-function PayOnlineDialog({ invoice }: { invoice: Invoice }) {
-  const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const balance = Number(invoice.total) - Number(invoice.paid);
-  const [f, setF] = useState({ amount: balance, phone: "", operator: "airtel" });
-  const [reference, setReference] = useState<string | null>(null);
-  const [startedAt, setStartedAt] = useState<number | null>(null);
-
-  const initiate = useMutation({
-    mutationFn: () =>
-      api.guardians.payOnline({
-        invoiceId: invoice.id,
-        amount: f.amount,
-        phone: f.phone,
-        operator: f.operator,
-      }),
-    onSuccess: (tx) => {
-      setReference(tx.reference);
-      setStartedAt(Date.now());
-    },
-    onError: (e: any) => toast.error(e.message),
-  });
-
-  // Observed against the live API: a real MTN collection took ~3m17s to resolve (Airtel
-  // resolved in seconds) — 4 minutes gives real transactions room to complete before the UI
-  // falls back to manual "Check now" polling.
-  const POLL_TIMEOUT_MS = 4 * 60_000;
-  const timedOut = startedAt != null && Date.now() - startedAt > POLL_TIMEOUT_MS;
-  const { data: status, refetch: recheck } = useQuery({
-    queryKey: ["lenco-status", reference],
-    enabled: !!reference,
-    queryFn: () => api.guardians.lencoPaymentStatus(reference!),
-    refetchInterval: (query) => {
-      const s = query.state.data?.status;
-      if (s === "SUCCESSFUL" || s === "FAILED") return false;
-      if (startedAt != null && Date.now() - startedAt > POLL_TIMEOUT_MS) return false;
-      return 3000;
-    },
-  });
-
-  useEffect(() => {
-    if (status?.status === "SUCCESSFUL" && reference) {
-      qc.invalidateQueries({ queryKey: ["my-invoices"] });
-      qc.invalidateQueries({ queryKey: ["my-payment-claims"] });
-      toast.success("Payment received — thank you!");
-      setReference(null);
-      setStartedAt(null);
-      setOpen(false);
-    }
-  }, [status?.status, reference, qc]);
-
-  function reset() {
-    setF({ amount: balance, phone: "", operator: "airtel" });
-    setReference(null);
-    setStartedAt(null);
-  }
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(v) => {
-        setOpen(v);
-        if (v) reset();
-      }}
-    >
-      <DialogTrigger asChild>
-        <Button size="sm">
-          <Smartphone className="h-3.5 w-3.5 mr-1" /> Pay online
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Pay via mobile money</DialogTitle>
-        </DialogHeader>
-
-        {!reference ? (
-          <>
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Invoice <span className="font-mono text-foreground">{invoice.invoiceNo}</span> —
-                balance {money(balance)}. A payment prompt will be sent to the phone number below.
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Phone number</Label>
-                  <Input
-                    value={f.phone}
-                    onChange={(e) => setF({ ...f, phone: e.target.value })}
-                    placeholder="09XXXXXXXX"
-                  />
-                </div>
-                <div>
-                  <Label>Network</Label>
-                  <Select value={f.operator} onValueChange={(v) => setF({ ...f, operator: v })}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {MOBILE_MONEY_OPERATORS.map((o) => (
-                        <SelectItem key={o.value} value={o.value}>
-                          {o.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div>
-                <Label>Amount</Label>
-                <Input
-                  type="number"
-                  max={balance}
-                  value={f.amount}
-                  onChange={(e) => setF({ ...f, amount: Number(e.target.value) })}
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button
-                onClick={() => initiate.mutate()}
-                disabled={
-                  !f.phone || !f.amount || f.amount <= 0 || f.amount > balance || initiate.isPending
-                }
-              >
-                {initiate.isPending ? "Sending prompt…" : "Send payment prompt"}
-              </Button>
-            </DialogFooter>
-          </>
-        ) : status?.status === "FAILED" ? (
-          <div className="space-y-3">
-            <p className="text-sm text-destructive">
-              Payment failed{status.failureReason ? `: ${status.failureReason}` : "."}
-            </p>
-            <Button variant="outline" onClick={reset}>
-              Try again
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-3 text-center py-4">
-            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
-            <p className="text-sm">
-              A payment prompt was sent to <span className="font-medium">{f.phone}</span> — approve
-              it on your phone to complete the payment.
-            </p>
-            {timedOut && (
-              <div className="space-y-2">
-                <p className="text-xs text-muted-foreground">
-                  Still waiting — you can check back later, we'll keep confirming in the background.
-                </p>
-                <Button variant="outline" size="sm" onClick={() => recheck()}>
-                  Check now
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
   );
 }
 

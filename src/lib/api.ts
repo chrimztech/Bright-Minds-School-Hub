@@ -208,7 +208,11 @@ export const api = {
       bulkCreate: (data: Partial<Invoice>[]) => post<Invoice[]>("/fees/invoices/bulk", data),
       applyLateFees: () => post<Invoice[]>("/fees/invoices/apply-late-fees", {}),
       delete: (id: string) => del(`/fees/invoices/${id}`),
+      payOnline: (id: string, data: { amount: number; phone: string; operator: string }) =>
+        post<GatewayTransaction>(`/fees/invoices/${id}/pay-online`, data),
     },
+    gatewayTransactionStatus: (reference: string) =>
+      get<GatewayTransaction>(`/fees/gateway-transactions/${reference}`),
     payments: {
       list: (params?: {
         pupilId?: string;
