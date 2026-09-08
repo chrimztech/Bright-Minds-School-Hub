@@ -575,6 +575,31 @@ function PaymentsTab() {
         classId: classFilter || undefined,
       }),
   });
+  // Canteen purchases are their own point-of-sale entity, not a Payment against an invoice
+  // (a canteen sale can be a walk-in with no pupil at all) — but the money is real, so it
+  // belongs in this list alongside fee payments rather than only showing up in the Accounts
+  // income total.
+  const { data: canteenSales = [] } = useQuery({
+    queryKey: ["canteen-sales-payments"],
+    queryFn: () => api.canteen.sales.list(),
+  });
+  const filteredCanteenSales = canteenSales.filter((s) => {
+    if (pupilFilter) return s.pupil?.id === pupilFilter;
+    if (classFilter) return s.pupil?.schoolClass?.id === classFilter;
+    if (gradeFilter) return s.pupil?.schoolClass?.name === gradeFilter;
+    return true;
+  });
+  type PaymentRow =
+    | { source: "fee"; date: string; payment: Payment }
+    | { source: "canteen"; date: string; sale: (typeof canteenSales)[number] };
+  const combinedRows: PaymentRow[] = [
+    ...data.map((p): PaymentRow => ({ source: "fee", date: p.paidOn, payment: p })),
+    ...filteredCanteenSales.map((s): PaymentRow => ({
+      source: "canteen",
+      date: s.servedOn,
+      sale: s,
+    })),
+  ].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   const { data: invoices = [] } = useQuery({
     queryKey: ["invoices-open"],
     queryFn: () => api.fees.invoices.list(),
@@ -597,7 +622,7 @@ function PaymentsTab() {
     totalPages,
     pageSize,
     total,
-  } = usePagination(data, 25, `${pupilFilter}-${gradeFilter}-${classFilter}`);
+  } = usePagination(combinedRows, 25, `${pupilFilter}-${gradeFilter}-${classFilter}`);
   const create = useMutation({
     mutationFn: (f: any) =>
       api.fees.payments.create({
@@ -708,7 +733,7 @@ function PaymentsTab() {
           </Button>
         )}
         <span className="ml-auto text-sm text-muted-foreground">
-          {data.length} payment{data.length !== 1 ? "s" : ""}
+          {combinedRows.length} payment{combinedRows.length !== 1 ? "s" : ""}
         </span>
       </div>
       <div className="flex justify-end">
@@ -836,74 +861,95 @@ function PaymentsTab() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.length === 0 ? (
+            {combinedRows.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                   No payments yet.
                 </TableCell>
               </TableRow>
             ) : (
-              pagedPayments.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell className="font-mono text-xs">{p.receiptNo}</TableCell>
-                  <TableCell>{p.paidOn}</TableCell>
-                  <TableCell>{p.pupil?.fullName}</TableCell>
-                  <TableCell className="font-mono text-xs">{p.invoice?.invoiceNo ?? "—"}</TableCell>
-                  <TableCell>{p.method}</TableCell>
-                  <TableCell className="font-semibold">{money(p.amount)}</TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        p.status === "CONFIRMED"
-                          ? "default"
-                          : p.status === "REJECTED"
-                            ? "destructive"
-                            : "secondary"
-                      }
-                    >
-                      {p.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right whitespace-nowrap">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => setReceiptFor(p)}
-                      title="Print receipt"
-                    >
-                      <Printer className="h-4 w-4" />
-                    </Button>
-                    {canReverse && (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setEditing(p)}
-                          title="Correct the amount, method or date on this payment"
-                        >
-                          <Pencil className="h-4 w-4 mr-1" /> Correct
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => {
-                            if (
-                              confirm(
-                                `Reverse this payment of ${money(p.amount)}? It will be removed and the invoice balance restored to what it was before this payment.`,
+              pagedPayments.map((row) =>
+                row.source === "canteen" ? (
+                  <TableRow key={`canteen-${row.sale.id}`}>
+                    <TableCell className="font-mono text-xs text-muted-foreground">—</TableCell>
+                    <TableCell>{row.sale.servedOn}</TableCell>
+                    <TableCell>{row.sale.pupil?.fullName ?? "Walk-in"}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      Canteen — {row.sale.itemName} ×{row.sale.quantity}
+                    </TableCell>
+                    <TableCell>{(row.sale.paymentMethod ?? "cash").toUpperCase()}</TableCell>
+                    <TableCell className="font-semibold">{money(row.sale.total)}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">CANTEEN</Badge>
+                    </TableCell>
+                    <TableCell className="text-right whitespace-nowrap text-xs text-muted-foreground">
+                      Manage on Canteen page
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  <TableRow key={row.payment.id}>
+                    <TableCell className="font-mono text-xs">{row.payment.receiptNo}</TableCell>
+                    <TableCell>{row.payment.paidOn}</TableCell>
+                    <TableCell>{row.payment.pupil?.fullName}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {row.payment.invoice?.invoiceNo ?? "—"}
+                    </TableCell>
+                    <TableCell>{row.payment.method}</TableCell>
+                    <TableCell className="font-semibold">{money(row.payment.amount)}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={
+                          row.payment.status === "CONFIRMED"
+                            ? "default"
+                            : row.payment.status === "REJECTED"
+                              ? "destructive"
+                              : "secondary"
+                        }
+                      >
+                        {row.payment.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right whitespace-nowrap">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => setReceiptFor(row.payment)}
+                        title="Print receipt"
+                      >
+                        <Printer className="h-4 w-4" />
+                      </Button>
+                      {canReverse && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setEditing(row.payment)}
+                            title="Correct the amount, method or date on this payment"
+                          >
+                            <Pencil className="h-4 w-4 mr-1" /> Correct
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => {
+                              if (
+                                confirm(
+                                  `Reverse this payment of ${money(row.payment.amount)}? It will be removed and the invoice balance restored to what it was before this payment.`,
+                                )
                               )
-                            )
-                              remove.mutate(p.id);
-                          }}
-                          title="Reverse this payment — removes it and restores the invoice balance"
-                        >
-                          <RotateCcw className="h-4 w-4 mr-1" /> Reverse
-                        </Button>
-                      </>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))
+                                remove.mutate(row.payment.id);
+                            }}
+                            title="Reverse this payment — removes it and restores the invoice balance"
+                          >
+                            <RotateCcw className="h-4 w-4 mr-1" /> Reverse
+                          </Button>
+                        </>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ),
+              )
             )}
           </TableBody>
         </Table>

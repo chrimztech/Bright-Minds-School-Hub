@@ -7,13 +7,43 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import { Trash2, UserPlus, Eye, EyeOff, KeyRound, Plus, ShieldCheck, Lock, LayoutGrid, ListChecks } from "lucide-react";
+import {
+  Trash2,
+  UserPlus,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Plus,
+  ShieldCheck,
+  Lock,
+  LayoutGrid,
+  ListChecks,
+} from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/EmptyState";
 import { useAuth, hasPermission } from "@/lib/auth";
@@ -21,13 +51,26 @@ import { usePagination } from "@/hooks/use-pagination";
 import { PaginationBar } from "@/components/PaginationBar";
 
 const SYSTEM_ROLES = [
-  "SUPER_ADMIN","HEAD_TEACHER","DEPUTY_HEAD","ADMIN",
-  "ACCOUNTANT","TEACHER","CLASS_TEACHER","PARENT",
-  "LIBRARIAN","STORE_OFFICER","TRANSPORT_OFFICER","NURSE","SECURITY",
+  "SUPER_ADMIN",
+  "HEAD_TEACHER",
+  "DEPUTY_HEAD",
+  "ADMIN",
+  "ACCOUNTANT",
+  "TEACHER",
+  "CLASS_TEACHER",
+  "PARENT",
+  "LIBRARIAN",
+  "STORE_OFFICER",
+  "TRANSPORT_OFFICER",
+  "NURSE",
+  "SECURITY",
 ];
 
 function displayRole(r: string) {
-  return r.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+  return r
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 // Friendly page names for the "By page" permission view — maps a permission's `module`
@@ -65,7 +108,13 @@ const PAGE_LABELS: Record<string, string> = {
   TIMETABLE: "Timetable",
 };
 function pageLabel(mod: string) {
-  return PAGE_LABELS[mod] ?? mod.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+  return (
+    PAGE_LABELS[mod] ??
+    mod
+      .replace(/_/g, " ")
+      .toLowerCase()
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+  );
 }
 
 export const Route = createFileRoute("/_authenticated/users")({
@@ -76,15 +125,22 @@ export const Route = createFileRoute("/_authenticated/users")({
 function UsersPage() {
   return (
     <>
-      <PageHeader title="Users, roles & permissions" description="Manage user accounts, assign roles, configure permissions" />
+      <PageHeader
+        title="Users, roles & permissions"
+        description="Manage user accounts, assign roles, configure permissions"
+      />
       <div className="p-6">
         <Tabs defaultValue="users">
           <TabsList>
             <TabsTrigger value="users">Users</TabsTrigger>
             <TabsTrigger value="roles">Roles & Permissions</TabsTrigger>
           </TabsList>
-          <TabsContent value="users"><UsersTab /></TabsContent>
-          <TabsContent value="roles"><RolesTab /></TabsContent>
+          <TabsContent value="users">
+            <UsersTab />
+          </TabsContent>
+          <TabsContent value="roles">
+            <RolesTab />
+          </TabsContent>
         </Tabs>
       </div>
     </>
@@ -105,12 +161,25 @@ function UsersTab() {
   const [showResetPw, setShowResetPw] = useState(false);
 
   const { data: users = [] } = useQuery({ queryKey: ["users"], queryFn: () => api.users.list() });
-  const { pageItems: pagedUsers, page, setPage, totalPages, pageSize, total } = usePagination(users, 25);
+  const {
+    pageItems: pagedUsers,
+    page,
+    setPage,
+    totalPages,
+    pageSize,
+    total,
+  } = usePagination(users, 25);
   const { data: dbRoles = [] } = useQuery({ queryKey: ["roles"], queryFn: () => api.roles.list() });
   const allRoles = dbRoles.length > 0 ? dbRoles.map((r) => r.name) : SYSTEM_ROLES;
 
   const createUser = useMutation({
-    mutationFn: () => api.users.create({ email: form.email, password: form.password, fullName: form.fullName, roles: [form.role] }),
+    mutationFn: () =>
+      api.users.create({
+        email: form.email,
+        password: form.password,
+        fullName: form.fullName,
+        roles: [form.role],
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["users"] });
       toast.success("User created — they will be prompted to change password on first login");
@@ -122,21 +191,48 @@ function UsersTab() {
 
   const deleteUser = useMutation({
     mutationFn: (id: string) => api.users.delete(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["users"] }); toast.success("User deleted"); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      toast.success("User deleted");
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
   const addRole = useMutation({
-    mutationFn: ({ id, role, currentRoles }: { id: string; role: string; currentRoles: string[] }) =>
-      api.users.updateRoles(id, [...new Set([...currentRoles, role])]),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["users"] }); toast.success("Role assigned"); },
+    mutationFn: ({
+      id,
+      role,
+      currentRoles,
+    }: {
+      id: string;
+      role: string;
+      currentRoles: string[];
+    }) => api.users.updateRoles(id, [...new Set([...currentRoles, role])]),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      toast.success("Role assigned");
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
   const removeRole = useMutation({
-    mutationFn: ({ id, role, currentRoles }: { id: string; role: string; currentRoles: string[] }) =>
-      api.users.updateRoles(id, currentRoles.filter((r) => r !== role)),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["users"] }); toast.success("Role removed"); },
+    mutationFn: ({
+      id,
+      role,
+      currentRoles,
+    }: {
+      id: string;
+      role: string;
+      currentRoles: string[];
+    }) =>
+      api.users.updateRoles(
+        id,
+        currentRoles.filter((r) => r !== role),
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      toast.success("Role removed");
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -144,7 +240,9 @@ function UsersTab() {
     mutationFn: () => api.users.resetPassword(resetting!.id, resetPw),
     onSuccess: () => {
       toast.success("Password reset — user will be prompted to change it on next login.");
-      setResetting(null); setResetPw(""); setShowResetPw(false);
+      setResetting(null);
+      setResetPw("");
+      setShowResetPw(false);
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -152,40 +250,85 @@ function UsersTab() {
   return (
     <div className="space-y-4 pt-4">
       {canManage && (
-      <div className="flex justify-end">
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild><Button><UserPlus className="h-4 w-4 mr-1" /> New user</Button></DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Create user account</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <div><Label>Full name</Label><Input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} /></div>
-              <div><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-              <div>
-                <Label>Temporary password</Label>
-                <div className="relative">
-                  <Input type={showPw ? "text" : "password"} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="pr-10" minLength={6} />
-                  <button type="button" onClick={() => setShowPw((s) => !s)} className="absolute inset-y-0 right-0 px-3 text-muted-foreground hover:text-foreground">
-                    {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
+        <div className="flex justify-end">
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <UserPlus className="h-4 w-4 mr-1" /> New user
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create user account</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div>
+                  <Label>Full name</Label>
+                  <Input
+                    value={form.fullName}
+                    onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Email</Label>
+                  <Input
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Temporary password</Label>
+                  <div className="relative">
+                    <Input
+                      type={showPw ? "text" : "password"}
+                      value={form.password}
+                      onChange={(e) => setForm({ ...form, password: e.target.value })}
+                      className="pr-10"
+                      minLength={6}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPw((s) => !s)}
+                      className="absolute inset-y-0 right-0 px-3 text-muted-foreground hover:text-foreground"
+                    >
+                      {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <Label>Initial role</Label>
+                  <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allRoles.map((r) => (
+                        <SelectItem key={r} value={r}>
+                          {displayRole(r)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  className="w-full"
+                  disabled={!form.email || !form.password || !form.fullName || createUser.isPending}
+                  onClick={() => createUser.mutate()}
+                >
+                  {createUser.isPending ? "Creating…" : "Create user"}
+                </Button>
+                <div className="rounded-lg border border-dashed bg-muted/40 p-3 text-xs flex gap-2">
+                  <Lock className="h-4 w-4 shrink-0 text-muted-foreground mt-0.5" />
+                  <p className="text-muted-foreground">
+                    The user will be prompted to set their own password on first login. Share the
+                    temporary password and email securely.
+                  </p>
                 </div>
               </div>
-              <div><Label>Initial role</Label>
-                <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{allRoles.map((r) => <SelectItem key={r} value={r}>{displayRole(r)}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <Button className="w-full" disabled={!form.email || !form.password || !form.fullName || createUser.isPending} onClick={() => createUser.mutate()}>
-                {createUser.isPending ? "Creating…" : "Create user"}
-              </Button>
-              <div className="rounded-lg border border-dashed bg-muted/40 p-3 text-xs flex gap-2">
-                <Lock className="h-4 w-4 shrink-0 text-muted-foreground mt-0.5" />
-                <p className="text-muted-foreground">The user will be prompted to set their own password on first login. Share the temporary password and email securely.</p>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
+            </DialogContent>
+          </Dialog>
+        </div>
       )}
 
       <div className="rounded-lg border bg-card">
@@ -201,73 +344,153 @@ function UsersTab() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {users.length === 0 ? <TableRow><TableCell colSpan={6}><EmptyState /></TableCell></TableRow> : pagedUsers.map((u) => (
-              <TableRow key={u.id}>
-                <TableCell className="font-medium">{u.fullName ?? "—"}</TableCell>
-                <TableCell>{u.email}</TableCell>
-                <TableCell>
-                  {u.mustChangePassword && <Badge variant="outline" className="text-amber-600 border-amber-400">Password change required</Badge>}
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-wrap gap-1">
-                    {u.roles.length === 0
-                      ? <span className="text-xs text-muted-foreground">No roles</span>
-                      : u.roles.map((r) => (
-                        <Badge key={r} variant="secondary" className="gap-1">
-                          {displayRole(r)}
-                          {canManage && (
-                            <button onClick={() => removeRole.mutate({ id: u.id, role: r, currentRoles: u.roles })} className="hover:text-destructive ml-1">
-                              <Trash2 className="h-3 w-3" />
-                            </button>
-                          )}
-                        </Badge>
-                      ))}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  {canManage && (
-                    <Select onValueChange={(v) => addRole.mutate({ id: u.id, role: v, currentRoles: u.roles })}>
-                      <SelectTrigger className="h-8 w-44"><SelectValue placeholder="Assign role…" /></SelectTrigger>
-                      <SelectContent>{allRoles.filter((r) => !u.roles.includes(r)).map((r) => <SelectItem key={r} value={r}>{displayRole(r)}</SelectItem>)}</SelectContent>
-                    </Select>
-                  )}
-                </TableCell>
-                <TableCell className="text-right flex gap-1 justify-end">
-                  {canManage && (
-                    <>
-                      <Button size="icon" variant="ghost" onClick={() => { setResetting({ id: u.id, email: u.email }); setResetPw(""); }} title="Reset password">
-                        <KeyRound className="h-4 w-4" />
-                      </Button>
-                      <Button size="icon" variant="ghost" onClick={() => { if (confirm(`Delete ${u.email}? This cannot be undone.`)) deleteUser.mutate(u.id); }}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </>
-                  )}
+            {users.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6}>
+                  <EmptyState />
                 </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              pagedUsers.map((u) => (
+                <TableRow key={u.id}>
+                  <TableCell className="font-medium">{u.fullName ?? "—"}</TableCell>
+                  <TableCell>{u.email}</TableCell>
+                  <TableCell>
+                    {u.mustChangePassword && (
+                      <Badge variant="outline" className="text-amber-600 border-amber-400">
+                        Password change required
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      {u.roles.length === 0 ? (
+                        <span className="text-xs text-muted-foreground">No roles</span>
+                      ) : (
+                        u.roles.map((r) => (
+                          <Badge key={r} variant="secondary" className="gap-1">
+                            {displayRole(r)}
+                            {canManage && (
+                              <button
+                                onClick={() =>
+                                  removeRole.mutate({ id: u.id, role: r, currentRoles: u.roles })
+                                }
+                                className="hover:text-destructive ml-1"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            )}
+                          </Badge>
+                        ))
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {canManage && (
+                      <Select
+                        onValueChange={(v) =>
+                          addRole.mutate({ id: u.id, role: v, currentRoles: u.roles })
+                        }
+                      >
+                        <SelectTrigger className="h-8 w-44">
+                          <SelectValue placeholder="Assign role…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {allRoles
+                            .filter((r) => !u.roles.includes(r))
+                            .map((r) => (
+                              <SelectItem key={r} value={r}>
+                                {displayRole(r)}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right flex gap-1 justify-end">
+                    {canManage && (
+                      <>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => {
+                            setResetting({ id: u.id, email: u.email });
+                            setResetPw("");
+                          }}
+                          title="Reset password"
+                        >
+                          <KeyRound className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => {
+                            if (confirm(`Delete ${u.email}? This cannot be undone.`))
+                              deleteUser.mutate(u.id);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </div>
-      <PaginationBar page={page} totalPages={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} />
+      <PaginationBar
+        page={page}
+        totalPages={totalPages}
+        total={total}
+        pageSize={pageSize}
+        onPageChange={setPage}
+      />
 
-      <Dialog open={!!resetting} onOpenChange={(o) => { if (!o) { setResetting(null); setResetPw(""); } }}>
+      <Dialog
+        open={!!resetting}
+        onOpenChange={(o) => {
+          if (!o) {
+            setResetting(null);
+            setResetPw("");
+          }
+        }}
+      >
         <DialogContent>
-          <DialogHeader><DialogTitle>Reset password — {resetting?.email}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Reset password — {resetting?.email}</DialogTitle>
+          </DialogHeader>
           <div className="space-y-3">
             <div>
               <Label>New temporary password</Label>
               <div className="relative">
-                <Input type={showResetPw ? "text" : "password"} value={resetPw} onChange={(e) => setResetPw(e.target.value)} className="pr-10" minLength={6} />
-                <button type="button" onClick={() => setShowResetPw((s) => !s)} className="absolute inset-y-0 right-0 px-3 text-muted-foreground hover:text-foreground">
+                <Input
+                  type={showResetPw ? "text" : "password"}
+                  value={resetPw}
+                  onChange={(e) => setResetPw(e.target.value)}
+                  className="pr-10"
+                  minLength={6}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowResetPw((s) => !s)}
+                  className="absolute inset-y-0 right-0 px-3 text-muted-foreground hover:text-foreground"
+                >
                   {showResetPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
             </div>
-            <Button className="w-full" disabled={resetPw.length < 6 || resetPassword.isPending} onClick={() => resetPassword.mutate()}>
+            <Button
+              className="w-full"
+              disabled={resetPw.length < 6 || resetPassword.isPending}
+              onClick={() => resetPassword.mutate()}
+            >
               {resetPassword.isPending ? "Resetting…" : "Reset password"}
             </Button>
-            <p className="text-xs text-muted-foreground">The user will be prompted to change this password on their next login.</p>
+            <p className="text-xs text-muted-foreground">
+              The user will be prompted to change this password on their next login.
+            </p>
           </div>
         </DialogContent>
       </Dialog>
@@ -283,6 +506,9 @@ function RolesTab() {
   const canManage = hasPermission(myPermissions, "roles:manage");
   const [selectedRole, setSelectedRole] = useState<SystemRole | null>(null);
   const [viewMode, setViewMode] = useState<"pages" | "permissions">("pages");
+  const [roleSearch, setRoleSearch] = useState("");
+  const [rolePermSearch, setRolePermSearch] = useState("");
+  const [registrySearch, setRegistrySearch] = useState("");
   const [newRoleName, setNewRoleName] = useState("");
   const [newRoleDesc, setNewRoleDesc] = useState("");
   const [newPermName, setNewPermName] = useState("");
@@ -290,23 +516,49 @@ function RolesTab() {
   const [newPermDesc, setNewPermDesc] = useState("");
 
   const { data: roles = [] } = useQuery({ queryKey: ["roles"], queryFn: () => api.roles.list() });
-  const { data: permissions = [] } = useQuery({ queryKey: ["permissions"], queryFn: () => api.roles.permissions.list() });
+  const { data: permissions = [] } = useQuery({
+    queryKey: ["permissions"],
+    queryFn: () => api.roles.permissions.list(),
+  });
 
   const createRole = useMutation({
-    mutationFn: () => api.roles.create({ name: newRoleName.toUpperCase().replace(/\s+/g, "_"), description: newRoleDesc }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["roles"] }); toast.success("Role created"); setNewRoleName(""); setNewRoleDesc(""); },
+    mutationFn: () =>
+      api.roles.create({
+        name: newRoleName.toUpperCase().replace(/\s+/g, "_"),
+        description: newRoleDesc,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["roles"] });
+      toast.success("Role created");
+      setNewRoleName("");
+      setNewRoleDesc("");
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
   const deleteRole = useMutation({
     mutationFn: (id: string) => api.roles.delete(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["roles"] }); if (selectedRole) setSelectedRole(null); toast.success("Role deleted"); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["roles"] });
+      if (selectedRole) setSelectedRole(null);
+      toast.success("Role deleted");
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
   const createPermission = useMutation({
-    mutationFn: () => api.roles.permissions.create({ name: newPermName, description: newPermDesc, module: newPermModule }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["permissions"] }); toast.success("Permission created"); setNewPermName(""); setNewPermDesc(""); },
+    mutationFn: () =>
+      api.roles.permissions.create({
+        name: newPermName,
+        description: newPermDesc,
+        module: newPermModule,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["permissions"] });
+      toast.success("Permission created");
+      setNewPermName("");
+      setNewPermDesc("");
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -329,6 +581,38 @@ function RolesTab() {
 
   const permModules = [...new Set(permissions.map((p) => p.module))].sort();
   const rolePerms = new Set(selectedRole?.permissions.map((p) => p.id) ?? []);
+
+  const filteredRoles = roles.filter((r) => {
+    const s = roleSearch.toLowerCase().trim();
+    return (
+      !s ||
+      displayRole(r.name).toLowerCase().includes(s) ||
+      (r.description ?? "").toLowerCase().includes(s)
+    );
+  });
+
+  function matchesPermSearch(p: (typeof permissions)[number], search: string) {
+    const s = search.toLowerCase().trim();
+    return (
+      !s ||
+      p.name.toLowerCase().includes(s) ||
+      (p.description ?? "").toLowerCase().includes(s) ||
+      p.module.toLowerCase().includes(s)
+    );
+  }
+
+  // "By page" mode shows a module even if only its module name/label matches, since a search
+  // like "canteen" should still surface the whole CANTEEN screen toggle, not just a permission
+  // whose own name happens to contain the word.
+  const filteredPageModules = permModules.filter((mod) => {
+    const s = rolePermSearch.toLowerCase().trim();
+    if (!s) return true;
+    if (pageLabel(mod).toLowerCase().includes(s) || mod.toLowerCase().includes(s)) return true;
+    return permissions.some((p) => p.module === mod && matchesPermSearch(p, rolePermSearch));
+  });
+  const registryModules = permModules.filter((mod) =>
+    permissions.some((p) => p.module === mod && matchesPermSearch(p, registrySearch)),
+  );
 
   function togglePerm(permId: string) {
     if (!selectedRole) return;
@@ -359,19 +643,48 @@ function RolesTab() {
             <ShieldCheck className="h-4 w-4 text-muted-foreground" />
             <span className="font-medium text-sm">Roles</span>
           </div>
+          <div className="p-2 border-b">
+            <Input
+              placeholder="Search roles…"
+              value={roleSearch}
+              onChange={(e) => setRoleSearch(e.target.value)}
+              className="h-8 text-sm"
+            />
+          </div>
           <div className="divide-y">
-            {roles.map((r) => (
-              <div key={r.id}
+            {filteredRoles.length === 0 && (
+              <p className="px-3 py-4 text-xs text-muted-foreground text-center">
+                No roles match your search.
+              </p>
+            )}
+            {filteredRoles.map((r) => (
+              <div
+                key={r.id}
                 className={`flex items-center justify-between px-3 py-2.5 cursor-pointer hover:bg-muted/50 ${selectedRole?.id === r.id ? "bg-muted" : ""}`}
-                onClick={() => setSelectedRole(r)}>
+                onClick={() => setSelectedRole(r)}
+              >
                 <div>
                   <p className="text-sm font-medium">{displayRole(r.name)}</p>
-                  {r.description && <p className="text-xs text-muted-foreground">{r.description}</p>}
+                  {r.description && (
+                    <p className="text-xs text-muted-foreground">{r.description}</p>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
-                  {r.isSystem && <Badge variant="outline" className="text-[10px] py-0">System</Badge>}
+                  {r.isSystem && (
+                    <Badge variant="outline" className="text-[10px] py-0">
+                      System
+                    </Badge>
+                  )}
                   {!r.isSystem && canManage && (
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); if (confirm(`Delete role "${r.name}"?`)) deleteRole.mutate(r.id); }}>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm(`Delete role "${r.name}"?`)) deleteRole.mutate(r.id);
+                      }}
+                    >
                       <Trash2 className="h-3.5 w-3.5 text-destructive" />
                     </Button>
                   )}
@@ -382,9 +695,24 @@ function RolesTab() {
           {canManage && (
             <div className="p-3 border-t space-y-2">
               <p className="text-xs font-medium text-muted-foreground">Create custom role</p>
-              <Input placeholder="Role name (e.g. LIBRARIAN_SENIOR)" value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} className="h-8 text-sm" />
-              <Input placeholder="Description (optional)" value={newRoleDesc} onChange={(e) => setNewRoleDesc(e.target.value)} className="h-8 text-sm" />
-              <Button size="sm" className="w-full" disabled={!newRoleName || createRole.isPending} onClick={() => createRole.mutate()}>
+              <Input
+                placeholder="Role name (e.g. LIBRARIAN_SENIOR)"
+                value={newRoleName}
+                onChange={(e) => setNewRoleName(e.target.value)}
+                className="h-8 text-sm"
+              />
+              <Input
+                placeholder="Description (optional)"
+                value={newRoleDesc}
+                onChange={(e) => setNewRoleDesc(e.target.value)}
+                className="h-8 text-sm"
+              />
+              <Button
+                size="sm"
+                className="w-full"
+                disabled={!newRoleName || createRole.isPending}
+                onClick={() => createRole.mutate()}
+              >
                 <Plus className="h-3.5 w-3.5 mr-1" /> Create role
               </Button>
             </div>
@@ -398,14 +726,22 @@ function RolesTab() {
           <div className="rounded-lg border bg-card">
             <div className="p-3 border-b">
               <div className="flex items-center justify-between gap-2">
-                <p className="font-medium text-sm">{displayRole(selectedRole.name)} — permissions</p>
+                <p className="font-medium text-sm">
+                  {displayRole(selectedRole.name)} — permissions
+                </p>
                 <div className="flex items-center gap-1 rounded-md border bg-muted/40 p-0.5">
-                  <button type="button" onClick={() => setViewMode("pages")}
-                    className={`flex items-center gap-1 rounded px-2 py-1 text-xs ${viewMode === "pages" ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("pages")}
+                    className={`flex items-center gap-1 rounded px-2 py-1 text-xs ${viewMode === "pages" ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}
+                  >
                     <LayoutGrid className="h-3 w-3" /> By page
                   </button>
-                  <button type="button" onClick={() => setViewMode("permissions")}
-                    className={`flex items-center gap-1 rounded px-2 py-1 text-xs ${viewMode === "permissions" ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("permissions")}
+                    className={`flex items-center gap-1 rounded px-2 py-1 text-xs ${viewMode === "permissions" ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}
+                  >
                     <ListChecks className="h-3 w-3" /> By permission
                   </button>
                 </div>
@@ -415,25 +751,50 @@ function RolesTab() {
                   ? "Turn a screen on or off for this role. Changes save immediately."
                   : "Check permissions to grant access. Changes save immediately."}
               </p>
+              <Input
+                placeholder="Search…"
+                value={rolePermSearch}
+                onChange={(e) => setRolePermSearch(e.target.value)}
+                className="h-8 text-sm mt-2"
+              />
             </div>
 
             {viewMode === "pages" ? (
               <div className="divide-y max-h-[60vh] overflow-auto">
-                {permModules.map((mod) => {
+                {filteredPageModules.length === 0 && (
+                  <p className="px-3 py-4 text-xs text-muted-foreground text-center">No matches.</p>
+                )}
+                {filteredPageModules.map((mod) => {
                   const modPerms = permissions.filter((p) => p.module === mod);
                   const grantedCount = modPerms.filter((p) => rolePerms.has(p.id)).length;
                   const state: "on" | "off" | "partial" =
-                    grantedCount === 0 ? "off" : grantedCount === modPerms.length ? "on" : "partial";
+                    grantedCount === 0
+                      ? "off"
+                      : grantedCount === modPerms.length
+                        ? "on"
+                        : "partial";
                   return (
-                    <div key={mod} className="flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-muted/50">
+                    <div
+                      key={mod}
+                      className="flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-muted/50"
+                    >
                       <div>
                         <p className="text-sm font-medium">{pageLabel(mod)}</p>
                         <p className="text-xs text-muted-foreground">
-                          {state === "partial" ? `${grantedCount}/${modPerms.length} permissions granted` : `${modPerms.length} permission${modPerms.length === 1 ? "" : "s"}`}
+                          {state === "partial"
+                            ? `${grantedCount}/${modPerms.length} permissions granted`
+                            : `${modPerms.length} permission${modPerms.length === 1 ? "" : "s"}`}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        {state === "partial" && <Badge variant="outline" className="text-[10px] py-0 text-amber-600 border-amber-400">Partial</Badge>}
+                        {state === "partial" && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] py-0 text-amber-600 border-amber-400"
+                          >
+                            Partial
+                          </Badge>
+                        )}
                         <Switch
                           checked={state !== "off"}
                           onCheckedChange={(checked) => togglePage(mod, checked)}
@@ -446,23 +807,35 @@ function RolesTab() {
               </div>
             ) : (
               <div className="divide-y max-h-[60vh] overflow-auto">
-                {permModules.map((mod) => (
+                {filteredPageModules.length === 0 && (
+                  <p className="px-3 py-4 text-xs text-muted-foreground text-center">No matches.</p>
+                )}
+                {filteredPageModules.map((mod) => (
                   <div key={mod}>
-                    <p className="px-3 py-1.5 text-[10px] uppercase tracking-widest text-muted-foreground bg-muted/40 font-medium">{mod}</p>
-                    {permissions.filter((p) => p.module === mod).map((p) => (
-                      <label key={p.id} className="flex items-start gap-3 px-3 py-2 hover:bg-muted/50 cursor-pointer">
-                        <Checkbox
-                          checked={rolePerms.has(p.id)}
-                          onCheckedChange={() => togglePerm(p.id)}
-                          disabled={!canManage || setRolePerms.isPending}
-                          className="mt-0.5"
-                        />
-                        <div>
-                          <p className="text-sm font-mono">{p.name}</p>
-                          {p.description && <p className="text-xs text-muted-foreground">{p.description}</p>}
-                        </div>
-                      </label>
-                    ))}
+                    <p className="px-3 py-1.5 text-[10px] uppercase tracking-widest text-muted-foreground bg-muted/40 font-medium">
+                      {mod}
+                    </p>
+                    {permissions
+                      .filter((p) => p.module === mod && matchesPermSearch(p, rolePermSearch))
+                      .map((p) => (
+                        <label
+                          key={p.id}
+                          className="flex items-start gap-3 px-3 py-2 hover:bg-muted/50 cursor-pointer"
+                        >
+                          <Checkbox
+                            checked={rolePerms.has(p.id)}
+                            onCheckedChange={() => togglePerm(p.id)}
+                            disabled={!canManage || setRolePerms.isPending}
+                            className="mt-0.5"
+                          />
+                          <div>
+                            <p className="text-sm font-mono">{p.name}</p>
+                            {p.description && (
+                              <p className="text-xs text-muted-foreground">{p.description}</p>
+                            )}
+                          </div>
+                        </label>
+                      ))}
                   </div>
                 ))}
               </div>
@@ -482,40 +855,93 @@ function RolesTab() {
             <Lock className="h-4 w-4 text-muted-foreground" />
             <span className="font-medium text-sm">All permissions</span>
           </div>
+          <div className="p-2 border-b">
+            <Input
+              placeholder="Search permissions…"
+              value={registrySearch}
+              onChange={(e) => setRegistrySearch(e.target.value)}
+              className="h-8 text-sm"
+            />
+          </div>
           <div className="divide-y max-h-96 overflow-auto">
-            {permModules.map((mod) => (
+            {registryModules.length === 0 && (
+              <p className="px-3 py-4 text-xs text-muted-foreground text-center">
+                No permissions match your search.
+              </p>
+            )}
+            {registryModules.map((mod) => (
               <div key={mod}>
-                <p className="px-3 py-1 text-[10px] uppercase tracking-widest text-muted-foreground bg-muted/40">{mod}</p>
-                {permissions.filter((p) => p.module === mod).map((p) => (
-                  <div key={p.id} className="flex items-center justify-between px-3 py-2 hover:bg-muted/50">
-                    <div>
-                      <p className="text-xs font-mono">{p.name}</p>
-                      {p.description && <p className="text-[11px] text-muted-foreground">{p.description}</p>}
+                <p className="px-3 py-1 text-[10px] uppercase tracking-widest text-muted-foreground bg-muted/40">
+                  {mod}
+                </p>
+                {permissions
+                  .filter((p) => p.module === mod && matchesPermSearch(p, registrySearch))
+                  .map((p) => (
+                    <div
+                      key={p.id}
+                      className="flex items-center justify-between px-3 py-2 hover:bg-muted/50"
+                    >
+                      <div>
+                        <p className="text-xs font-mono">{p.name}</p>
+                        {p.description && (
+                          <p className="text-[11px] text-muted-foreground">{p.description}</p>
+                        )}
+                      </div>
+                      {canManage && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-6 w-6 shrink-0"
+                          onClick={() => {
+                            if (confirm(`Delete permission "${p.name}"?`))
+                              deletePermission.mutate(p.id);
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3 text-destructive" />
+                        </Button>
+                      )}
                     </div>
-                    {canManage && (
-                      <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0"
-                        onClick={() => { if (confirm(`Delete permission "${p.name}"?`)) deletePermission.mutate(p.id); }}>
-                        <Trash2 className="h-3 w-3 text-destructive" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
+                  ))}
               </div>
             ))}
           </div>
           {canManage && (
             <div className="p-3 border-t space-y-2">
               <p className="text-xs font-medium text-muted-foreground">Add custom permission</p>
-              <Input placeholder="module:action (e.g. canteen:manage)" value={newPermName} onChange={(e) => setNewPermName(e.target.value)} className="h-8 text-sm font-mono" />
-              <Input placeholder="Description" value={newPermDesc} onChange={(e) => setNewPermDesc(e.target.value)} className="h-8 text-sm" />
+              <Input
+                placeholder="module:action (e.g. canteen:manage)"
+                value={newPermName}
+                onChange={(e) => setNewPermName(e.target.value)}
+                className="h-8 text-sm font-mono"
+              />
+              <Input
+                placeholder="Description"
+                value={newPermDesc}
+                onChange={(e) => setNewPermDesc(e.target.value)}
+                className="h-8 text-sm"
+              />
               <Select value={newPermModule} onValueChange={setNewPermModule}>
-                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
-                  {[...permModules, "GENERAL"].filter((v, i, a) => a.indexOf(v) === i).sort().map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                  {[...permModules, "GENERAL"]
+                    .filter((v, i, a) => a.indexOf(v) === i)
+                    .sort()
+                    .map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {m}
+                      </SelectItem>
+                    ))}
                   <SelectItem value="CUSTOM">CUSTOM</SelectItem>
                 </SelectContent>
               </Select>
-              <Button size="sm" className="w-full" disabled={!newPermName || createPermission.isPending} onClick={() => createPermission.mutate()}>
+              <Button
+                size="sm"
+                className="w-full"
+                disabled={!newPermName || createPermission.isPending}
+                onClick={() => createPermission.mutate()}
+              >
                 <Plus className="h-3.5 w-3.5 mr-1" /> Add permission
               </Button>
             </div>
