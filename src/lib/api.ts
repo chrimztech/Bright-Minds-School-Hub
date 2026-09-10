@@ -403,8 +403,13 @@ export const api = {
     },
     subscriptions: {
       list: (pupilId?: string) => get<CanteenSubscription[]>("/canteen/subscriptions", { pupilId }),
-      create: (data: { pupilId: string; planId: string; termId?: string }) =>
-        post<CanteenSubscription>("/canteen/subscriptions", data),
+      create: (data: {
+        pupilId: string;
+        planId: string;
+        termId?: string;
+        startDate?: string;
+        endDate?: string;
+      }) => post<CanteenSubscription>("/canteen/subscriptions", data),
       cancel: (id: string) => patch<CanteenSubscription>(`/canteen/subscriptions/${id}/cancel`),
     },
   },

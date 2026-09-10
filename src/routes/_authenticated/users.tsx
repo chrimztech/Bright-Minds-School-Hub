@@ -159,8 +159,18 @@ function UsersTab() {
   const [resetting, setResetting] = useState<{ id: string; email: string } | null>(null);
   const [resetPw, setResetPw] = useState("");
   const [showResetPw, setShowResetPw] = useState(false);
+  const [search, setSearch] = useState("");
 
   const { data: users = [] } = useQuery({ queryKey: ["users"], queryFn: () => api.users.list() });
+  const filteredUsers = users.filter((u) => {
+    const s = search.toLowerCase().trim();
+    if (!s) return true;
+    return (
+      (u.fullName ?? "").toLowerCase().includes(s) ||
+      u.email.toLowerCase().includes(s) ||
+      u.roles.some((r) => r.toLowerCase().includes(s))
+    );
+  });
   const {
     pageItems: pagedUsers,
     page,
@@ -168,7 +178,7 @@ function UsersTab() {
     totalPages,
     pageSize,
     total,
-  } = usePagination(users, 25);
+  } = usePagination(filteredUsers, 25, search);
   const { data: dbRoles = [] } = useQuery({ queryKey: ["roles"], queryFn: () => api.roles.list() });
   const allRoles = dbRoles.length > 0 ? dbRoles.map((r) => r.name) : SYSTEM_ROLES;
 
@@ -331,6 +341,13 @@ function UsersTab() {
         </div>
       )}
 
+      <Input
+        placeholder="Search users by name, email or role…"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        className="max-w-sm"
+      />
+
       <div className="rounded-lg border bg-card">
         <Table>
           <TableHeader>
@@ -344,10 +361,10 @@ function UsersTab() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {users.length === 0 ? (
+            {filteredUsers.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6}>
-                  <EmptyState />
+                  <EmptyState message={search ? "No users match your search." : undefined} />
                 </TableCell>
               </TableRow>
             ) : (

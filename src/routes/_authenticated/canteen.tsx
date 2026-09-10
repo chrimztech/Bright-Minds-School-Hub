@@ -20,9 +20,28 @@ import { EmptyState } from "@/components/EmptyState";
 import { useAuth, hasPermission } from "@/lib/auth";
 import { usePagination } from "@/hooks/use-pagination";
 import { PaginationBar } from "@/components/PaginationBar";
+import { addWeeks, addMonths, format, parseISO } from "date-fns";
 
 const CATEGORIES = ["Breakfast", "Lunch", "Snack", "Drink", "Meal", "Other"];
 const METHODS = ["CASH", "MOBILE_MONEY", "ACCOUNT", "CARD"];
+const DURATIONS = [
+  { value: "WEEK", label: "1 week" },
+  { value: "MONTH", label: "1 month" },
+  { value: "TERM", label: "Full term" },
+  { value: "CUSTOM", label: "Custom end date" },
+];
+// A subscription is a pre-paid block of meals for a fixed period, not an open-ended
+// commitment — so a start date alone (the only thing it used to record) can't tell anyone
+// when the paid-for period runs out. This derives that end date from what was actually paid
+// for (a week / a month / a term), so "custom" is the only case needing a manual pick.
+function computeEndDate(startDate: string, duration: string, termEndDate?: string) {
+  if (!startDate) return "";
+  const start = parseISO(startDate);
+  if (duration === "WEEK") return format(addWeeks(start, 1), "yyyy-MM-dd");
+  if (duration === "MONTH") return format(addMonths(start, 1), "yyyy-MM-dd");
+  if (duration === "TERM") return termEndDate ?? "";
+  return "";
+}
 
 export const Route = createFileRoute("/_authenticated/canteen")({
   head: () => ({ meta: [{ title: "Canteen" }] }),
@@ -238,8 +257,16 @@ function Subs() {
   // Only feed the New-subscription dialog, which never renders without canteen:manage.
   const { data: pupils = [] } = useQuery({ queryKey: ["pupils-mini"], enabled: canManage, queryFn: () => api.pupils.all() });
   const { data: plans = [] } = useQuery({ queryKey: ["canteen-plans"], enabled: canManage, queryFn: () => api.canteen.plans.list() });
+  const { data: terms = [] } = useQuery({ queryKey: ["terms-canteen"], enabled: canManage, queryFn: () => api.academicYears.terms.all() });
   const create = useMutation({
-    mutationFn: (f: any) => api.canteen.subscriptions.create({ pupilId: f.pupilId, planId: f.planId }),
+    mutationFn: (f: any) =>
+      api.canteen.subscriptions.create({
+        pupilId: f.pupilId,
+        planId: f.planId,
+        termId: f.termId || undefined,
+        startDate: f.startDate,
+        endDate: f.endDate || undefined,
+      }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["canteen-subs"] }); toast.success("Subscribed"); setOpen(false); },
     onError: (e: any) => toast.error(e.message),
   });
@@ -248,7 +275,21 @@ function Subs() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["canteen-subs"] }),
     onError: (e: any) => toast.error(e.message),
   });
-  const [f, setF] = useState<any>({ pupilId: "", planId: "", startDate: new Date().toISOString().slice(0, 10) });
+  const [f, setF] = useState<any>({
+    pupilId: "",
+    planId: "",
+    termId: "",
+    duration: "MONTH",
+    startDate: new Date().toISOString().slice(0, 10),
+    endDate: "",
+  });
+  const selectedTermEndDate = terms.find((t: any) => t.id === f.termId)?.endDate;
+  const derivedEndDate = useMemo(
+    () => computeEndDate(f.startDate, f.duration, selectedTermEndDate),
+    [f.startDate, f.duration, selectedTermEndDate],
+  );
+  const effectiveEndDate = f.duration === "CUSTOM" ? f.endDate : derivedEndDate;
+  const today = new Date().toISOString().slice(0, 10);
   return (
     <div className="space-y-3 mt-4">
       {canManage && (
@@ -269,24 +310,62 @@ function Subs() {
                   <SelectContent>{plans.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              <div><Label>Start date</Label><Input type="date" value={f.startDate} onChange={(e) => setF({ ...f, startDate: e.target.value })} /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Start date</Label><Input type="date" value={f.startDate} onChange={(e) => setF({ ...f, startDate: e.target.value })} /></div>
+                <div><Label>Paid for</Label>
+                  <Select value={f.duration} onValueChange={(v) => setF({ ...f, duration: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{DURATIONS.map((d) => <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {f.duration === "TERM" && (
+                <div><Label>Term</Label>
+                  <Select value={f.termId} onValueChange={(v) => setF({ ...f, termId: v })}>
+                    <SelectTrigger><SelectValue placeholder="Choose term" /></SelectTrigger>
+                    <SelectContent>{terms.map((t: any) => <SelectItem key={t.id} value={t.id}>{t.name}{t.academicYear ? ` — ${t.academicYear.name}` : ""}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              )}
+              <div><Label>End date{f.duration !== "CUSTOM" ? " (calculated)" : ""}</Label>
+                <Input
+                  type="date"
+                  value={effectiveEndDate}
+                  disabled={f.duration !== "CUSTOM"}
+                  onChange={(e) => setF({ ...f, endDate: e.target.value })}
+                />
+              </div>
             </div>
-            <DialogFooter><Button onClick={() => create.mutate(f)} disabled={!f.pupilId || !f.planId}>Save</Button></DialogFooter>
+            <DialogFooter>
+              <Button
+                onClick={() => create.mutate({ ...f, endDate: effectiveEndDate })}
+                disabled={!f.pupilId || !f.planId || (f.duration === "TERM" && !f.termId) || !effectiveEndDate}
+              >
+                Save
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       )}
       <div className="rounded-lg border bg-card"><Table>
-        <TableHeader><TableRow><TableHead>Pupil</TableHead><TableHead>Plan</TableHead><TableHead>Start</TableHead><TableHead>Status</TableHead><TableHead></TableHead></TableRow></TableHeader>
+        <TableHeader><TableRow><TableHead>Pupil</TableHead><TableHead>Plan</TableHead><TableHead>Start</TableHead><TableHead>End</TableHead><TableHead>Status</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
-          {data.length === 0 ? <TableRow><TableCell colSpan={5}><EmptyState /></TableCell></TableRow> : pagedSubs.map((r: any) => (
+          {data.length === 0 ? <TableRow><TableCell colSpan={6}><EmptyState /></TableCell></TableRow> : pagedSubs.map((r: any) => {
+            const expired = r.status === "ACTIVE" && r.endDate && r.endDate < today;
+            return (
             <TableRow key={r.id}>
               <TableCell>{r.pupil?.fullName ?? "—"}</TableCell>
               <TableCell>{r.plan?.name ?? "—"} <span className="text-xs text-muted-foreground ml-1">{money(r.plan?.pricePerTerm ?? 0)}</span></TableCell>
               <TableCell>{r.startDate}</TableCell>
-              <TableCell><Badge variant={r.status === "ACTIVE" ? "default" : "secondary"}>{r.status}</Badge></TableCell>
+              <TableCell>{r.endDate ?? "—"}</TableCell>
+              <TableCell>
+                {expired
+                  ? <Badge variant="secondary">Expired</Badge>
+                  : <Badge variant={r.status === "ACTIVE" ? "default" : "secondary"}>{r.status}</Badge>}
+              </TableCell>
               <TableCell className="text-right">{canManage && r.status === "ACTIVE" && <Button size="sm" variant="outline" onClick={() => { if (confirm("Cancel subscription?")) cancel.mutate(r.id); }}>Cancel</Button>}</TableCell>
             </TableRow>
-          ))}
+          );})}
         </TableBody>
       </Table></div>
       <PaginationBar page={page} totalPages={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} />

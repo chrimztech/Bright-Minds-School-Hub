@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, Pencil, RotateCcw } from "lucide-react";
+import { Plus, Pencil, RotateCcw, Download, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { money } from "@/lib/format";
 import { EmptyState } from "@/components/EmptyState";
@@ -52,6 +52,8 @@ const CATEGORIES = [
   "Other",
 ];
 
+const EXPENSE_FILTERS = [{ value: "ALL", label: "All expenses" }, ...CATEGORIES.map((c) => ({ value: c, label: c }))];
+
 const INCOME_FILTERS = [
   { value: "ALL", label: "All payments" },
   { value: "SCHOOL_FEE", label: "School fees" },
@@ -70,6 +72,35 @@ function incomeCategory(p: Payment) {
   return INCOME_FILTERS.some((f) => f.value === cat) ? cat : "OTHER";
 }
 
+// Shared by Income and Expenses "Download CSV" buttons — builds a CSV blob client-side (no
+// server round-trip) and triggers a browser download. CSV opens natively in Excel, so this
+// doubles as the "Excel download" provision without adding a spreadsheet library dependency.
+function downloadCsv(filename: string, headers: string[], rows: (string | number)[][]) {
+  const csv = [headers, ...rows]
+    .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function ExportActions({ onDownload }: { onDownload: () => void }) {
+  return (
+    <div className="no-print flex gap-2">
+      <Button variant="outline" size="sm" onClick={onDownload}>
+        <Download className="h-4 w-4 mr-1" /> Download Excel (CSV)
+      </Button>
+      <Button variant="outline" size="sm" onClick={() => window.print()}>
+        <Printer className="h-4 w-4 mr-1" /> Print
+      </Button>
+    </div>
+  );
+}
+
 export const Route = createFileRoute("/_authenticated/accounts")({
   head: () => ({ meta: [{ title: "Accounts" }] }),
   component: AccountsPage,
@@ -82,7 +113,7 @@ function AccountsPage() {
       <div className="p-6 space-y-6">
         <Summary />
         <Tabs defaultValue="expenses">
-          <TabsList>
+          <TabsList className="no-print">
             <TabsTrigger value="expenses">Expenses</TabsTrigger>
             <TabsTrigger value="income">Income (fee receipts)</TabsTrigger>
           </TabsList>
@@ -158,18 +189,51 @@ function Expenses() {
   const canReverse = hasAny(roles, ADMIN_ROLES);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
+  const [filter, setFilter] = useState("ALL");
+  const [method, setMethod] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [search, setSearch] = useState("");
   const { data = [] } = useQuery({
     queryKey: ["expenses"],
     queryFn: () => api.accounts.expenses.list(),
   });
+
+  const filtered = data
+    .filter((e) => filter === "ALL" || e.category === filter)
+    .filter((e) => !method || e.paymentMethod === method)
+    .filter((e) => !fromDate || e.spentOn >= fromDate)
+    .filter((e) => !toDate || e.spentOn <= toDate)
+    .filter((e) => {
+      const s = search.toLowerCase().trim();
+      if (!s) return true;
+      return (
+        (e.payee ?? "").toLowerCase().includes(s) ||
+        (e.description ?? "").toLowerCase().includes(s)
+      );
+    })
+    .sort((a, b) => b.spentOn.localeCompare(a.spentOn));
+  const total = filtered.reduce((a, r) => a + Number(r.amount), 0);
+
+  const breakdown = EXPENSE_FILTERS.filter((f) => f.value !== "ALL")
+    .map((f) => ({
+      ...f,
+      total: data
+        .filter((e) => e.category === f.value)
+        .reduce((a, r) => a + Number(r.amount), 0),
+    }))
+    .filter((f) => f.total > 0);
+
+  const filtersActive = method || fromDate || toDate || search;
   const {
     pageItems: pagedExpenses,
     page,
     setPage,
     totalPages,
     pageSize,
-    total,
-  } = usePagination(data, 25);
+    total: filteredCount,
+  } = usePagination(filtered, 25, `${filter}-${method}-${fromDate}-${toDate}-${search}`);
+
   const create = useMutation({
     mutationFn: (f: any) => api.accounts.expenses.create(f),
     onSuccess: () => {
@@ -196,16 +260,122 @@ function Expenses() {
     },
     onError: (e: any) => toast.error(e.message),
   });
+
+  function exportCsv() {
+    downloadCsv(
+      `expenses-${new Date().toISOString().slice(0, 10)}.csv`,
+      ["Date", "Category", "Payee", "Description", "Amount", "Method", "Ref no."],
+      filtered.map((e) => [
+        e.spentOn,
+        e.category,
+        e.payee ?? "",
+        e.description ?? "",
+        Number(e.amount),
+        e.paymentMethod ?? "",
+        e.refNo ?? "",
+      ]),
+    );
+  }
+
   return (
     <div className="space-y-3 mt-4">
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger asChild>
-          <Button>
-            <Plus className="h-4 w-4 mr-1" /> New expense
+      <div className="no-print flex flex-wrap items-center justify-between gap-2">
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="h-4 w-4 mr-1" /> New expense
+            </Button>
+          </DialogTrigger>
+          <ExpenseForm onSubmit={(f: any) => create.mutate(f)} />
+        </Dialog>
+        <ExportActions onDownload={exportCsv} />
+      </div>
+
+      <div className="no-print flex flex-wrap items-end gap-3">
+        <div>
+          <Label className="text-sm">Method</Label>
+          <Select value={method} onValueChange={setMethod}>
+            <SelectTrigger className="w-44">
+              <SelectValue placeholder="All methods" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">All methods</SelectItem>
+              {["CASH", "BANK", "MOBILE_MONEY", "CHEQUE", "CARD"].map((m) => (
+                <SelectItem key={m} value={m}>
+                  {m.replace("_", " ")}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-sm">From</Label>
+          <Input
+            type="date"
+            className="w-40"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+          />
+        </div>
+        <div>
+          <Label className="text-sm">To</Label>
+          <Input
+            type="date"
+            className="w-40"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+          />
+        </div>
+        <div>
+          <Label className="text-sm">Payee / description</Label>
+          <Input
+            className="w-56"
+            placeholder="Search…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        {filtersActive && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setMethod("");
+              setFromDate("");
+              setToDate("");
+              setSearch("");
+            }}
+          >
+            Clear filters
           </Button>
-        </DialogTrigger>
-        <ExpenseForm onSubmit={(f: any) => create.mutate(f)} />
-      </Dialog>
+        )}
+      </div>
+
+      <div className="no-print flex flex-wrap gap-2">
+        {EXPENSE_FILTERS.map((f) => (
+          <button
+            key={f.value}
+            onClick={() => setFilter(f.value)}
+            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${filter === f.value ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"}`}
+          >
+            {f.label}
+          </button>
+        ))}
+        <span className="ml-auto text-sm text-muted-foreground self-center">
+          {filtered.length} expense{filtered.length !== 1 ? "s" : ""} · {money(total)}
+        </span>
+      </div>
+
+      {breakdown.length > 0 && (
+        <div className="no-print flex flex-wrap gap-3 text-xs text-muted-foreground">
+          {breakdown.map((b) => (
+            <span key={b.value} className="rounded-md border px-2.5 py-1">
+              {b.label}: <span className="font-medium text-foreground">{money(b.total)}</span>
+            </span>
+          ))}
+        </div>
+      )}
+
       <div className="rounded-lg border bg-card">
         <Table>
           <TableHeader>
@@ -215,11 +385,11 @@ function Expenses() {
               <TableHead>Payee</TableHead>
               <TableHead>Description</TableHead>
               <TableHead className="text-right">Amount</TableHead>
-              <TableHead></TableHead>
+              <TableHead className="no-print"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.length === 0 ? (
+            {filtered.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6}>
                   <EmptyState />
@@ -233,7 +403,7 @@ function Expenses() {
                   <TableCell>{e.payee ?? "—"}</TableCell>
                   <TableCell className="max-w-[280px] truncate">{e.description}</TableCell>
                   <TableCell className="text-right">{money(e.amount)}</TableCell>
-                  <TableCell className="text-right whitespace-nowrap">
+                  <TableCell className="no-print text-right whitespace-nowrap">
                     {canReverse && (
                       <>
                         <Button
@@ -272,7 +442,7 @@ function Expenses() {
       <PaginationBar
         page={page}
         totalPages={totalPages}
-        total={total}
+        total={filteredCount}
         pageSize={pageSize}
         onPageChange={setPage}
       />
@@ -516,9 +686,28 @@ function Income() {
     total: visibleCount,
   } = usePagination(visible, 25, `${filter}-${classId}-${termId}-${academicYearId}-${pupilId}`);
 
+  function exportCsv() {
+    downloadCsv(
+      `income-${new Date().toISOString().slice(0, 10)}.csv`,
+      ["Date", "Pupil", "Class", "Category", "Method", "Amount"],
+      visible.map((r) => [
+        r.paidOn,
+        r.pupilName,
+        r.className ?? "",
+        INCOME_FILTERS.find((f) => f.value === r.category)?.label ?? "Other",
+        r.method,
+        r.amount,
+      ]),
+    );
+  }
+
   return (
     <div className="mt-4 space-y-3">
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="no-print flex justify-end">
+        <ExportActions onDownload={exportCsv} />
+      </div>
+
+      <div className="no-print flex flex-wrap items-end gap-3">
         <div>
           <Label className="text-sm">Class</Label>
           <Select value={classId} onValueChange={setClassId}>
@@ -601,7 +790,7 @@ function Income() {
         )}
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="no-print flex flex-wrap gap-2">
         {INCOME_FILTERS.map((f) => (
           <button
             key={f.value}
@@ -617,7 +806,7 @@ function Income() {
       </div>
 
       {breakdown.length > 0 && (
-        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+        <div className="no-print flex flex-wrap gap-3 text-xs text-muted-foreground">
           {breakdown.map((b) => (
             <span key={b.value} className="rounded-md border px-2.5 py-1">
               {b.label}: <span className="font-medium text-foreground">{money(b.total)}</span>
