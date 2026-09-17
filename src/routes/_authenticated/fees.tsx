@@ -34,8 +34,10 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Printer, Trash2, Receipt, Pencil, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { money } from "@/lib/format";
+import { downloadCsv } from "@/lib/csv";
 import { PrintOverlay, DocHeader, useSchool } from "@/components/PrintableDoc";
 import { ReceiptPrint } from "@/components/ReceiptPrint";
+import { ExportActions } from "@/components/ExportActions";
 import { useAuth, hasAny, ADMIN_ROLES } from "@/lib/auth";
 import { usePagination } from "@/hooks/use-pagination";
 import { PaginationBar } from "@/components/PaginationBar";
@@ -58,7 +60,7 @@ function Fees() {
       />
       <div className="p-6">
         <Tabs defaultValue="invoices">
-          <TabsList>
+          <TabsList className="no-print">
             <TabsTrigger value="invoices">Invoices</TabsTrigger>
             <TabsTrigger value="payments">Payments</TabsTrigger>
             <TabsTrigger value="pending">
@@ -167,10 +169,27 @@ function InvoicesTab() {
     onError: (e: any) => toast.error(e.message),
   });
   const [f, setF] = useState({ pupilId: "", description: "", total: 0, dueDate: "" });
+
+  function exportCsv() {
+    downloadCsv(
+      `invoices-${new Date().toISOString().slice(0, 10)}.csv`,
+      ["Invoice", "Pupil", "Description", "Total", "Paid", "Balance", "Status"],
+      data.map((i) => [
+        i.invoiceNo,
+        i.pupil?.fullName ?? "",
+        i.description ?? "",
+        Number(i.total),
+        Number(i.paid),
+        Number(i.total) - Number(i.paid),
+        i.status,
+      ]),
+    );
+  }
+
   return (
     <div className="space-y-3 pt-4">
       {/* Filters */}
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="no-print flex flex-wrap items-end gap-3">
         <div>
           <Label className="text-sm">Term</Label>
           <Select value={termFilter} onValueChange={setTermFilter}>
@@ -261,7 +280,8 @@ function InvoicesTab() {
           {data.length} invoice{data.length !== 1 ? "s" : ""}
         </span>
       </div>
-      <div className="flex justify-end gap-2">
+      <div className="no-print flex justify-end gap-2">
+        <ExportActions onDownload={exportCsv} />
         <Button
           variant="outline"
           onClick={() => applyLateFees.mutate()}
@@ -345,7 +365,7 @@ function InvoicesTab() {
               <TableHead>Paid</TableHead>
               <TableHead>Balance</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead></TableHead>
+              <TableHead className="no-print"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -377,7 +397,7 @@ function InvoicesTab() {
                       {i.status}
                     </Badge>
                   </TableCell>
-                  <TableCell className="flex items-center gap-1">
+                  <TableCell className="no-print flex items-center gap-1">
                     <Button size="icon" variant="ghost" onClick={() => setPrintId(i.id)}>
                       <Printer className="h-4 w-4" />
                     </Button>
@@ -660,10 +680,37 @@ function PaymentsTab() {
   });
   const [f, setF] = useState({ invoiceId: "", amount: 0, method: "CASH", reference: "" });
   const selectedInvoice = openInvoices.find((i) => i.id === f.invoiceId);
+
+  function exportCsv() {
+    downloadCsv(
+      `payments-${new Date().toISOString().slice(0, 10)}.csv`,
+      ["Date", "Pupil", "Invoice / item", "Method", "Amount", "Status"],
+      combinedRows.map((row) =>
+        row.source === "canteen"
+          ? [
+              row.sale.servedOn,
+              row.sale.pupil?.fullName ?? "Walk-in",
+              `Canteen — ${row.sale.itemName} ×${row.sale.quantity}`,
+              (row.sale.paymentMethod ?? "cash").toUpperCase(),
+              Number(row.sale.total),
+              "CANTEEN",
+            ]
+          : [
+              row.payment.paidOn,
+              row.payment.pupil?.fullName ?? "",
+              row.payment.invoice?.invoiceNo ?? "",
+              row.payment.method,
+              Number(row.payment.amount),
+              row.payment.status,
+            ],
+      ),
+    );
+  }
+
   return (
     <div className="space-y-3 pt-4">
       {/* Filters */}
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="no-print flex flex-wrap items-end gap-3">
         <div>
           <Label className="text-sm">Grade</Label>
           <Select
@@ -736,7 +783,8 @@ function PaymentsTab() {
           {combinedRows.length} payment{combinedRows.length !== 1 ? "s" : ""}
         </span>
       </div>
-      <div className="flex justify-end">
+      <div className="no-print flex justify-end gap-2">
+        <ExportActions onDownload={exportCsv} />
         <Dialog
           open={open}
           onOpenChange={(o) => {
@@ -857,7 +905,7 @@ function PaymentsTab() {
               <TableHead>Method</TableHead>
               <TableHead>Amount</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead></TableHead>
+              <TableHead className="no-print"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -882,7 +930,7 @@ function PaymentsTab() {
                     <TableCell>
                       <Badge variant="outline">CANTEEN</Badge>
                     </TableCell>
-                    <TableCell className="text-right whitespace-nowrap text-xs text-muted-foreground">
+                    <TableCell className="no-print text-right whitespace-nowrap text-xs text-muted-foreground">
                       Manage on Canteen page
                     </TableCell>
                   </TableRow>
@@ -909,7 +957,7 @@ function PaymentsTab() {
                         {row.payment.status}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right whitespace-nowrap">
+                    <TableCell className="no-print text-right whitespace-nowrap">
                       <Button
                         size="icon"
                         variant="ghost"

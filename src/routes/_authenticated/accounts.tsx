@@ -32,10 +32,12 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, Pencil, RotateCcw, Download, Printer } from "lucide-react";
+import { Plus, Pencil, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { money } from "@/lib/format";
+import { downloadCsv } from "@/lib/csv";
 import { EmptyState } from "@/components/EmptyState";
+import { ExportActions } from "@/components/ExportActions";
 import { useAuth, hasAny, ADMIN_ROLES } from "@/lib/auth";
 import { usePagination } from "@/hooks/use-pagination";
 import { PaginationBar } from "@/components/PaginationBar";
@@ -70,35 +72,6 @@ const INCOME_FILTERS = [
 function incomeCategory(p: Payment) {
   const cat = p.invoice?.feeItem?.category ?? "SCHOOL_FEE";
   return INCOME_FILTERS.some((f) => f.value === cat) ? cat : "OTHER";
-}
-
-// Shared by Income and Expenses "Download CSV" buttons — builds a CSV blob client-side (no
-// server round-trip) and triggers a browser download. CSV opens natively in Excel, so this
-// doubles as the "Excel download" provision without adding a spreadsheet library dependency.
-function downloadCsv(filename: string, headers: string[], rows: (string | number)[][]) {
-  const csv = [headers, ...rows]
-    .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
-    .join("\n");
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function ExportActions({ onDownload }: { onDownload: () => void }) {
-  return (
-    <div className="no-print flex gap-2">
-      <Button variant="outline" size="sm" onClick={onDownload}>
-        <Download className="h-4 w-4 mr-1" /> Download Excel (CSV)
-      </Button>
-      <Button variant="outline" size="sm" onClick={() => window.print()}>
-        <Printer className="h-4 w-4 mr-1" /> Print
-      </Button>
-    </div>
-  );
 }
 
 export const Route = createFileRoute("/_authenticated/accounts")({

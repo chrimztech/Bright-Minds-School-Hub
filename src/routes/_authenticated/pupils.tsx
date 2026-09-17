@@ -18,6 +18,8 @@ import { useAuth, hasAny, ADMIN_ROLES } from "@/lib/auth";
 import { ImageUploadField } from "@/components/ImageUploadField";
 import { usePagination } from "@/hooks/use-pagination";
 import { PaginationBar } from "@/components/PaginationBar";
+import { downloadCsv } from "@/lib/csv";
+import { ExportActions } from "@/components/ExportActions";
 
 export const Route = createFileRoute("/_authenticated/pupils")({
   head: () => ({ meta: [{ title: "Pupils" }] }),
@@ -70,6 +72,21 @@ function Pupils() {
     (genderFilter === "ALL" || p.gender === genderFilter));
   const { pageItems: pagedPupils, page, setPage, totalPages, pageSize, total } =
     usePagination(pupils, 25, `${q}-${classFilter}-${genderFilter}`);
+
+  function exportCsv() {
+    downloadCsv(
+      `pupils-${new Date().toISOString().slice(0, 10)}.csv`,
+      ["Name", "Admission no", "Class", "Gender", "Date of birth", "Status"],
+      pupils.map((p) => [
+        p.fullName,
+        p.admissionNo,
+        p.schoolClass ? `${p.schoolClass.name}${p.schoolClass.stream ? " " + p.schoolClass.stream : ""}` : "",
+        p.gender ?? "",
+        p.dob ?? "",
+        p.status,
+      ]),
+    );
+  }
 
   const create = useMutation({
     mutationFn: async (form: any) => {
@@ -148,7 +165,7 @@ function Pupils() {
         } />
       <BulkImport open={importOpen} onClose={() => setImportOpen(false)} classes={classes} onDone={() => qc.invalidateQueries({ queryKey: ["pupils-all"] })} />
       <div className="p-6 space-y-4">
-        <div className="flex items-center gap-3">
+        <div className="no-print flex items-center gap-3">
           <div className="relative flex-1 max-w-sm">
             <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
             <Input className="pl-9" placeholder="Search name or admission no…" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -173,6 +190,9 @@ function Pupils() {
               {pupils.length.toLocaleString()} {pupils.length === 1 ? "pupil" : "pupils"}
             </span>
           )}
+          <div className="ml-auto">
+            <ExportActions onDownload={exportCsv} />
+          </div>
         </div>
         <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
           <Table>
@@ -185,7 +205,7 @@ function Pupils() {
                 <TableHead>Gender</TableHead>
                 <TableHead>Date of birth</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="no-print text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -269,7 +289,7 @@ function Pupils() {
                           {p.status.charAt(0) + p.status.slice(1).toLowerCase()}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right py-2.5">
+                      <TableCell className="no-print text-right py-2.5">
                         <Button variant="ghost" size="sm" onClick={() => setEditing(p)}><Pencil className="h-4 w-4" /></Button>
                         <Button variant="ghost" size="sm" onClick={() => { if (confirm(`Delete pupil "${p.fullName}"?`)) remove.mutate(p.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                       </TableCell>
