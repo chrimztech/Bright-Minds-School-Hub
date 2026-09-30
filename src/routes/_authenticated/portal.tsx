@@ -45,7 +45,9 @@ import {
   FileText,
   Download,
   Printer,
+  BookMarked,
 } from "lucide-react";
+import { AttachmentPreview } from "@/components/AttachmentPreview";
 import { PrintOverlay, DocHeader, useSchool } from "@/components/PrintableDoc";
 import { ReceiptPrint } from "@/components/ReceiptPrint";
 import { PayOnlineDialog } from "@/components/PayOnlineDialog";
@@ -113,6 +115,19 @@ function ParentPortal() {
     queryFn: () => api.announcements.list(),
   });
 
+  // Homework is scoped server-side by class, and a parent has no assigned classes of their
+  // own, so it's fetched per child's class (deduped) rather than the unscoped list — otherwise
+  // a parent would see homework from every other class in the school too.
+  const childClassIds = Array.from(
+    new Set(pupils.map((p) => p.schoolClass?.id).filter((id): id is string => !!id)),
+  );
+  const { data: homework = [] } = useQuery({
+    queryKey: ["my-homework", childClassIds],
+    enabled: !!guardian && childClassIds.length > 0,
+    queryFn: async () =>
+      (await Promise.all(childClassIds.map((id) => api.homework.list(id)))).flat(),
+  });
+
   const balance = invoices.reduce((s, i) => s + (Number(i.total) - Number(i.paid)), 0);
   const presentDays = attendance.filter((a) => a.status === "PRESENT").length;
   const attendancePct = attendance.length
@@ -178,6 +193,7 @@ function ParentPortal() {
           <TabsList>
             <TabsTrigger value="children">Children</TabsTrigger>
             <TabsTrigger value="attendance">Attendance</TabsTrigger>
+            <TabsTrigger value="homework">Homework</TabsTrigger>
             <TabsTrigger value="fees">Fees</TabsTrigger>
             <TabsTrigger value="performance">Performance</TabsTrigger>
             <TabsTrigger value="notices">Notices</TabsTrigger>
@@ -345,6 +361,68 @@ function ParentPortal() {
                 </Table>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* ── Homework ── */}
+          <TabsContent value="homework">
+            {pupils.length === 0 ? (
+              <Card className="mt-3">
+                <CardContent className="p-10">
+                  <EmptyState message="No children linked yet." />
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="mt-3 space-y-6">
+                {pupils.map((p) => {
+                  const childHomework = homework
+                    .filter((h) => h.schoolClass?.id === p.schoolClass?.id)
+                    .sort((a, b) => (b.dueDate ?? "").localeCompare(a.dueDate ?? ""));
+                  return (
+                    <div key={p.id}>
+                      <p className="text-sm font-medium mb-2">
+                        {p.fullName}
+                        {p.schoolClass && (
+                          <span className="text-muted-foreground font-normal">
+                            {" "}
+                            — {p.schoolClass.name}
+                            {p.schoolClass.stream ? ` ${p.schoolClass.stream}` : ""}
+                          </span>
+                        )}
+                      </p>
+                      {childHomework.length === 0 ? (
+                        <Card>
+                          <CardContent className="py-6">
+                            <EmptyState message="No homework assigned yet." />
+                          </CardContent>
+                        </Card>
+                      ) : (
+                        <div className="grid gap-3 md:grid-cols-2">
+                          {childHomework.map((h) => (
+                            <Card key={h.id}>
+                              <CardHeader>
+                                <CardTitle className="flex items-center gap-2 text-base">
+                                  <BookMarked className="h-4 w-4 text-primary" /> {h.title}
+                                </CardTitle>
+                              </CardHeader>
+                              <CardContent className="space-y-2 text-sm">
+                                <div className="text-muted-foreground">
+                                  {h.subject?.name ?? ""}
+                                  {h.dueDate ? `${h.subject?.name ? " · " : ""}due ${h.dueDate}` : ""}
+                                </div>
+                                {h.description && (
+                                  <p className="whitespace-pre-wrap">{h.description}</p>
+                                )}
+                                {h.attachmentUrl && <AttachmentPreview url={h.attachmentUrl} />}
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </TabsContent>
 
           {/* ── Fees ── */}

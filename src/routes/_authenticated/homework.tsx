@@ -13,6 +13,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus, BookMarked, Trash2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth, hasAny, ADMIN_ROLES } from "@/lib/auth";
+import { FileUploadField } from "@/components/FileUploadField";
+import { AttachmentPreview } from "@/components/AttachmentPreview";
 
 export const Route = createFileRoute("/_authenticated/homework")({
   head: () => ({ meta: [{ title: "Homework" }] }),
@@ -26,7 +28,7 @@ function Homework() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
-  const [f, setF] = useState({ title: "", description: "", classId: "", subjectId: "", dueDate: "" });
+  const [f, setF] = useState({ title: "", description: "", classId: "", subjectId: "", dueDate: "", attachmentUrl: "" });
   // The backend already scopes GET /homework to the caller's assigned class(es) for a
   // TEACHER-tier role (see ClassScopeService), so this list is never re-filtered client-side.
   const { data = [] } = useQuery({ queryKey: ["homework"], queryFn: () => api.homework.list() });
@@ -35,12 +37,12 @@ function Homework() {
   const classes = isTeacher ? myClasses : allClasses;
   const { data: subjects = [] } = useQuery({ queryKey: ["subjects-hw"], queryFn: () => api.subjects.list() });
   const create = useMutation({
-    mutationFn: () => api.homework.create({ title: f.title, description: f.description || undefined, classId: f.classId || undefined, subjectId: f.subjectId || undefined, dueDate: f.dueDate || undefined }),
+    mutationFn: () => api.homework.create({ title: f.title, description: f.description || undefined, classId: f.classId || undefined, subjectId: f.subjectId || undefined, dueDate: f.dueDate || undefined, attachmentUrl: f.attachmentUrl || undefined }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["homework"] }); toast.success("Homework posted"); setOpen(false); },
     onError: (e: any) => toast.error(e.message),
   });
   const update = useMutation({
-    mutationFn: () => api.homework.update(editing.id, { title: f.title, description: f.description || undefined, classId: f.classId || undefined, subjectId: f.subjectId || undefined, dueDate: f.dueDate || undefined }),
+    mutationFn: () => api.homework.update(editing.id, { title: f.title, description: f.description || undefined, classId: f.classId || undefined, subjectId: f.subjectId || undefined, dueDate: f.dueDate || undefined, attachmentUrl: f.attachmentUrl || undefined }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["homework"] }); toast.success("Homework updated"); setEditing(null); },
     onError: (e: any) => toast.error(e.message),
   });
@@ -51,12 +53,12 @@ function Homework() {
   });
   function openEdit(h: any) {
     setEditing(h);
-    setF({ title: h.title, description: h.description ?? "", classId: h.schoolClass?.id ?? "", subjectId: h.subject?.id ?? "", dueDate: h.dueDate ?? "" });
+    setF({ title: h.title, description: h.description ?? "", classId: h.schoolClass?.id ?? "", subjectId: h.subject?.id ?? "", dueDate: h.dueDate ?? "", attachmentUrl: h.attachmentUrl ?? "" });
   }
   return (
     <>
       <PageHeader title="Homework" actions={
-        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) setF({ title: "", description: "", classId: "", subjectId: "", dueDate: "" }); }}>
+        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) setF({ title: "", description: "", classId: "", subjectId: "", dueDate: "", attachmentUrl: "" }); }}>
           <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Assign</Button></DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>New homework</DialogTitle></DialogHeader>
@@ -81,6 +83,7 @@ function Homework() {
                   {h.schoolClass?.name ?? "All classes"}{h.subject?.name ? ` · ${h.subject.name}` : ""}{h.dueDate ? ` · due ${h.dueDate}` : ""}
                 </div>
                 <p className="whitespace-pre-wrap">{h.description}</p>
+                {h.attachmentUrl && <AttachmentPreview url={h.attachmentUrl} />}
               </CardContent>
             </Card>
           ))}
@@ -117,6 +120,7 @@ function HomeworkFormFields({ f, setF, classes, subjects }: { f: any; setF: (f: 
         </div>
         <div><Label>Due</Label><Input type="date" value={f.dueDate} onChange={(e) => setF({ ...f, dueDate: e.target.value })} /></div>
       </div>
+      <div><Label>Attachment</Label><FileUploadField value={f.attachmentUrl} onChange={(url) => setF({ ...f, attachmentUrl: url })} /></div>
     </div>
   );
 }
