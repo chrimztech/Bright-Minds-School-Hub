@@ -173,7 +173,7 @@ function Exams() {
       />
       <div className="p-6 space-y-4">
         {/* Term filter */}
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Label className="shrink-0">Filter by term:</Label>
           <Select value={termFilter} onValueChange={setTermFilter}>
             <SelectTrigger className="w-72">

@@ -165,8 +165,8 @@ function Pupils() {
         } />
       <BulkImport open={importOpen} onClose={() => setImportOpen(false)} classes={classes} onDone={() => qc.invalidateQueries({ queryKey: ["pupils-all"] })} />
       <div className="p-6 space-y-4">
-        <div className="no-print flex items-center gap-3">
-          <div className="relative flex-1 max-w-sm">
+        <div className="no-print flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-[200px] max-w-sm">
             <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
             <Input className="pl-9" placeholder="Search name or admission no…" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
