@@ -125,6 +125,15 @@ function InvoicesTab() {
     queryKey: ["pupils-pick2"],
     queryFn: () => api.pupils.all(),
   });
+  // The actual amount charged is whatever "Administrative Late Fee" is set to under Fee
+  // items — fetched here purely so the button's own label/tooltip can say the real
+  // current amount instead of a hardcoded figure that stops matching reality the moment
+  // someone edits it.
+  const { data: feeItems = [] } = useQuery({
+    queryKey: ["fee_items"],
+    queryFn: () => api.fees.items.list(),
+  });
+  const lateFeeAmount = feeItems.find((i) => i.category === "LATE_FEE")?.amount;
   const {
     pageItems: pagedInvoices,
     page,
@@ -152,10 +161,14 @@ function InvoicesTab() {
     mutationFn: () => api.fees.invoices.applyLateFees(),
     onSuccess: (created) => {
       qc.invalidateQueries({ queryKey: ["invoices"] });
+      qc.invalidateQueries({ queryKey: ["fee_items"] });
+      // Report the amount the server actually charged (created[0].total) rather than a
+      // hardcoded figure — every created invoice carries the same "Administrative Late
+      // Fee" amount that was in effect the moment this ran.
       toast.success(
         created.length === 0
           ? "No overdue invoices needed a late fee"
-          : `Charged K35 administrative fee on ${created.length} overdue invoice${created.length !== 1 ? "s" : ""}`,
+          : `Charged ${money(created[0].total)} administrative fee on ${created.length} overdue invoice${created.length !== 1 ? "s" : ""}`,
       );
     },
     onError: (e: any) => toast.error(e.message),
@@ -286,7 +299,11 @@ function InvoicesTab() {
           variant="outline"
           onClick={() => applyLateFees.mutate()}
           disabled={applyLateFees.isPending}
-          title="Charges a K35 administrative fee on invoices past their due date that haven't been fully paid"
+          title={
+            lateFeeAmount != null
+              ? `Charges a ${money(lateFeeAmount)} administrative fee (set under Fee items → Administrative Late Fee) on invoices past their due date that haven't been fully paid`
+              : "Charges an administrative fee (configurable under Fee items → Administrative Late Fee) on invoices past their due date that haven't been fully paid"
+          }
         >
           {applyLateFees.isPending ? "Checking…" : "Apply late fees"}
         </Button>
@@ -1407,6 +1424,13 @@ function FeeItemsTab() {
                   <TableCell>{i.term?.name ?? "—"}</TableCell>
                   <TableCell>
                     <Input
+                      // Keyed on the server's own amount so this remounts (and its
+                      // defaultValue resets) whenever that value actually changes —
+                      // otherwise, being uncontrolled, it would keep showing whatever
+                      // was last typed even after a refetch, which is exactly what made
+                      // an edit look like it hadn't "taken" once you navigated away and
+                      // back while this same row stayed mounted.
+                      key={`${i.id}-${i.amount}`}
                       type="number"
                       defaultValue={i.amount}
                       className="h-8 w-28"
