@@ -38,7 +38,7 @@ import { downloadCsv } from "@/lib/csv";
 import { PrintOverlay, DocHeader, useSchool } from "@/components/PrintableDoc";
 import { ReceiptPrint } from "@/components/ReceiptPrint";
 import { ExportActions } from "@/components/ExportActions";
-import { useAuth, hasAny, ADMIN_ROLES } from "@/lib/auth";
+import { useAuth, hasAny, hasPermission, ADMIN_ROLES } from "@/lib/auth";
 import { usePagination } from "@/hooks/use-pagination";
 import { PaginationBar } from "@/components/PaginationBar";
 
@@ -1213,6 +1213,12 @@ function categoryLabel(cat: string) {
 
 function FeeItemsTab() {
   const qc = useQueryClient();
+  const { permissions } = useAuth();
+  // Every mutation here (create/update/delete) requires fees:configure on the backend —
+  // without this check the amount field and buttons looked fully interactive to a role
+  // that lacked it (e.g. ACCOUNTANT, HEAD_TEACHER before they were granted it), so every
+  // edit attempt silently 403'd and just looked like "nothing happens when I change it."
+  const canConfigure = hasPermission(permissions, "fees:configure");
   const [f, setF] = useState<any>({
     name: "",
     category: "SCHOOL_FEE",
@@ -1360,7 +1366,7 @@ function FeeItemsTab() {
           )}
           <Button
             onClick={() => create.mutate()}
-            disabled={!f.name || !f.amount || create.isPending}
+            disabled={!canConfigure || !f.name || !f.amount || create.isPending}
           >
             <Plus className="h-4 w-4 mr-1" /> {create.isPending ? "Adding…" : "Add"}
           </Button>
@@ -1369,6 +1375,12 @@ function FeeItemsTab() {
           <p className="text-xs text-muted-foreground">
             Invoices billed from this item become eligible for the administrative late-payment fee
             once their due date passes.
+          </p>
+        )}
+        {!canConfigure && (
+          <p className="text-xs text-destructive">
+            Your role doesn't have permission to add or edit fee items — ask an administrator to
+            grant "fees:configure" under Users &amp; roles → Roles &amp; Permissions.
           </p>
         )}
       </div>
@@ -1434,6 +1446,8 @@ function FeeItemsTab() {
                       type="number"
                       defaultValue={i.amount}
                       className="h-8 w-28"
+                      disabled={!canConfigure}
+                      title={canConfigure ? undefined : "You don't have permission to edit fee items"}
                       onBlur={(e) => {
                         const v = Number(e.target.value);
                         if (v !== Number(i.amount)) update.mutate({ id: i.id, amount: v });
@@ -1444,6 +1458,8 @@ function FeeItemsTab() {
                     <Button
                       size="icon"
                       variant="ghost"
+                      disabled={!canConfigure}
+                      title={canConfigure ? undefined : "You don't have permission to delete fee items"}
                       onClick={() => {
                         if (confirm("Delete this fee item?")) remove.mutate(i.id);
                       }}
